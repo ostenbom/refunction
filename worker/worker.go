@@ -1,6 +1,10 @@
 package worker
 
-import "time"
+import (
+	"time"
+
+	"github.com/containerd/containerd"
+)
 
 func NewWorker() *Worker {
 	return &Worker{
@@ -10,4 +14,8 @@ func NewWorker() *Worker {
 
 type Worker struct {
 	StartedAt time.Time
+}
+
+func containerdClient() (*containerd.Client, error) {
+	return containerd.New("/run/containerd/containerd.sock")
 }
