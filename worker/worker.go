@@ -16,6 +16,6 @@ type Worker struct {
 	StartedAt time.Time
 }
 
-func containerdClient() (*containerd.Client, error) {
+func ContainerdClient() (*containerd.Client, error) {
 	return containerd.New("/run/containerd/containerd.sock")
 }

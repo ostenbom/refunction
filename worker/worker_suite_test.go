@@ -11,7 +11,7 @@ import (
 func TestWorker(t *testing.T) {
 	containerd, err := StartContainerd()
 	if err != nil {
-		Fail("Failed to start containerd server")
+		panic("Failed to start containerd server")
 	}
 
 	RegisterFailHandler(Fail)
@@ -19,7 +19,7 @@ func TestWorker(t *testing.T) {
 
 	err = containerd.Process.Kill()
 	if err != nil {
-		Fail("Could not kill containerd server")
+		panic("Could not kill containerd server")
 	}
 }
 

@@ -10,7 +10,7 @@ import (
 var _ = Describe("Worker", func() {
 
 	It("can connect to containerd", func() {
-		_, err := containerdClient()
+		_, err := ContainerdClient()
 		Expect(err).To(BeNil())
 	})
 
