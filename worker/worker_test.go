@@ -7,17 +7,30 @@ import (
 	. "github.com/ostenbom/refunction/worker"
 )
 
-var _ = Describe("Worker", func() {
+var _ = Describe("Worker Manager", func() {
+	var manager *Manager
 
-	It("can connect to containerd", func() {
-		_, err := ContainerdClient()
+	BeforeEach(func() {
+		var err error
+		manager, err = NewManager()
 		Expect(err).To(BeNil())
 	})
 
-	It("has a started_at timestamp", func() {
-		parent := NewWorker()
+	AfterEach(func() {
+		err := manager.End()
+		Expect(err).To(BeNil())
+	})
 
-		Expect(parent.StartedAt).NotTo(BeNil())
+	Describe("CreateContainer", func() {
+		BeforeEach(func() {
+			manager.StartChild()
+		})
+
+		It("pulls an image", func() {
+			images, err := manager.ListImages()
+			Expect(err).To(BeNil())
+			Expect(len(images)).To(Equal(1))
+		})
 	})
 
 })
