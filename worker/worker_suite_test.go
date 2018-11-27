@@ -1,23 +1,22 @@
 package worker_test
 
 import (
+	"os"
 	"os/exec"
 	"path/filepath"
 	"syscall"
 	"testing"
 
-	"github.com/containerd/containerd"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
 func TestWorker(t *testing.T) {
 	var createContainerd bool
-	client, err := containerd.New("/run/containerd/containerd.sock")
-	if err != nil {
+	_, err := os.Stat("/run/containerd/containerd.sock")
+	if os.IsNotExist(err) {
 		createContainerd = true
 	} else {
-		client.Close()
 		createContainerd = false
 	}
 

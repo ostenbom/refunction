@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"syscall"
 
 	"github.com/containerd/containerd"
@@ -10,21 +11,23 @@ import (
 	"github.com/containerd/containerd/oci"
 )
 
-func NewManager() (*Manager, error) {
+func NewManager(id string) (*Manager, error) {
 	client, err := ContainerdClient()
 	if err != nil {
 		return nil, err
 	}
 
-	ctx := namespaces.WithNamespace(context.Background(), "worker-test")
+	ctx := namespaces.WithNamespace(context.Background(), "refunction-worker")
 
 	return &Manager{
+		Id:     id,
 		client: client,
 		ctx:    ctx,
 	}, nil
 }
 
 type Manager struct {
+	Id           string
 	client       *containerd.Client
 	ctx          context.Context
 	container    containerd.Container
@@ -38,10 +41,9 @@ func (m *Manager) StartChild() error {
 		return err
 	}
 
-	// create a container
 	container, err := m.client.NewContainer(
 		m.ctx,
-		"redis-server",
+		"redis-server"+m.Id,
 		containerd.WithImage(image),
 		containerd.WithNewSpec(oci.WithImageConfig(image)),
 	)
@@ -72,6 +74,14 @@ func (m *Manager) StartChild() error {
 
 func (m *Manager) ListImages() ([]containerd.Image, error) {
 	return m.client.ListImages(m.ctx)
+}
+
+func (m *Manager) ChildPid() (uint32, error) {
+	if m.task == nil {
+		return 0, errors.New("child not initialized")
+	}
+
+	return m.task.Pid(), nil
 }
 
 func (m *Manager) End() error {

@@ -1,6 +1,8 @@
 package worker_test
 
 import (
+	"strconv"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -12,13 +14,19 @@ var _ = Describe("Worker Manager", func() {
 
 	BeforeEach(func() {
 		var err error
-		manager, err = NewManager()
+		id := strconv.Itoa(GinkgoParallelNode())
+		manager, err = NewManager(id)
 		Expect(err).To(BeNil())
 	})
 
 	AfterEach(func() {
 		err := manager.End()
 		Expect(err).To(BeNil())
+	})
+
+	It("has an id", func() {
+		Expect(manager.Id).NotTo(BeNil())
+		Expect(manager.Id).NotTo(Equal(""))
 	})
 
 	Describe("CreateContainer", func() {
@@ -31,6 +39,13 @@ var _ = Describe("Worker Manager", func() {
 			Expect(err).To(BeNil())
 			Expect(len(images)).To(Equal(1))
 		})
+
+		It("creates a child with a pid", func() {
+			pid, err := manager.ChildPid()
+			Expect(err).To(BeNil())
+			Expect(pid >= 0)
+		})
+
 	})
 
 })
