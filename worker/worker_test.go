@@ -15,7 +15,7 @@ var _ = Describe("Worker Manager", func() {
 	BeforeEach(func() {
 		var err error
 		id := strconv.Itoa(GinkgoParallelNode())
-		manager, err = NewManager(id)
+		manager, err = NewManager(id, client)
 		Expect(err).To(BeNil())
 	})
 
@@ -31,13 +31,12 @@ var _ = Describe("Worker Manager", func() {
 
 	Describe("CreateContainer", func() {
 		BeforeEach(func() {
-			manager.StartChild()
+			Expect(manager.StartChild()).To(Succeed())
 		})
 
-		It("pulls an image", func() {
-			images, err := manager.ListImages()
+		It("pulls the ptrace image", func() {
+			_, err := manager.GetImage("docker.io/ostenbom/ptrace-sleep:latest")
 			Expect(err).To(BeNil())
-			Expect(len(images)).To(Equal(1))
 		})
 
 		It("creates a child with a pid", func() {

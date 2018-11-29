@@ -1,60 +1,67 @@
 package worker_test
 
 import (
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"syscall"
 	"testing"
 
+	"code.cloudfoundry.org/guardian/gqt/containerdrunner"
+	"github.com/burntsushi/toml"
+	"github.com/containerd/containerd"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
+var (
+	runDir string
+	client *containerd.Client
+	server *exec.Cmd
+)
+
 func TestWorker(t *testing.T) {
-	var createContainerd bool
-	_, err := os.Stat("/run/containerd/containerd.sock")
-	if os.IsNotExist(err) {
-		createContainerd = true
-	} else {
-		createContainerd = false
-	}
-
-	var server *exec.Cmd
-	if createContainerd {
-		server, err = StartContainerd()
-		if err != nil {
-			panic("Failed to start containerd server")
-		}
-	}
-
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Worker Suite")
-
-	if createContainerd {
-		err = server.Process.Signal(syscall.SIGINT)
-		if err != nil {
-			panic("Could not kill containerd server")
-		}
-
-		_, err = server.Process.Wait()
-		if err != nil {
-			panic("Containerd server did not stop")
-		}
-	}
 }
 
-func StartContainerd() (*exec.Cmd, error) {
-	configPath, err := filepath.Abs("config.toml")
-	if err != nil {
-		return nil, err
-	}
+var _ = BeforeEach(func() {
+	runDir, err := ioutil.TempDir("", "")
+	Expect(err).NotTo(HaveOccurred())
 
-	cmd := exec.Command("containerd", "-c", configPath)
+	config := containerdrunner.ContainerdConfig(runDir)
+	server = NewServer(runDir, config)
+
+	client, err = GetContainerdClient(config.GRPC.Address)
+	Expect(err).NotTo(HaveOccurred())
+})
+
+var _ = AfterEach(func() {
+	err := client.Close()
+	Expect(err).NotTo(HaveOccurred())
+
+	err = server.Process.Signal(syscall.SIGINT)
+	Expect(err).NotTo(HaveOccurred())
+	_, err = server.Process.Wait()
+	Expect(err).NotTo(HaveOccurred())
+
+	Expect(os.RemoveAll(runDir)).To(Succeed())
+
+})
+
+func NewServer(runDir string, config containerdrunner.Config) *exec.Cmd {
+	configFile, err := os.OpenFile(filepath.Join(runDir, "containerd.toml"), os.O_TRUNC|os.O_WRONLY|os.O_CREATE, os.ModePerm)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(toml.NewEncoder(configFile).Encode(&config)).To(Succeed())
+	Expect(configFile.Close()).To(Succeed())
+
+	cmd := exec.Command("containerd", "--config", configFile.Name())
 	err = cmd.Start()
-	if err != nil {
-		return nil, err
-	}
+	Expect(err).NotTo(HaveOccurred())
+	return cmd
+}
 
-	return cmd, nil
+func GetContainerdClient(socketAddr string) (*containerd.Client, error) {
+	return containerd.New(socketAddr)
 }

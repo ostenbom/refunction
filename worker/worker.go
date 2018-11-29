@@ -11,13 +11,8 @@ import (
 	"github.com/containerd/containerd/oci"
 )
 
-func NewManager(id string) (*Manager, error) {
-	client, err := ContainerdClient()
-	if err != nil {
-		return nil, err
-	}
-
-	ctx := namespaces.WithNamespace(context.Background(), "refunction-worker")
+func NewManager(id string, client *containerd.Client) (*Manager, error) {
+	ctx := namespaces.WithNamespace(context.Background(), "refunction-worker"+id)
 
 	return &Manager{
 		Id:     id,
@@ -36,15 +31,16 @@ type Manager struct {
 }
 
 func (m *Manager) StartChild() error {
-	image, err := m.client.Pull(m.ctx, "docker.io/library/redis:alpine", containerd.WithPullUnpack)
+	image, err := m.client.Pull(m.ctx, "docker.io/ostenbom/ptrace-sleep:latest", containerd.WithPullUnpack)
 	if err != nil {
 		return err
 	}
 
+	containerId := "ptrace-sleep-" + m.Id
 	container, err := m.client.NewContainer(
 		m.ctx,
-		"redis-server"+m.Id,
-		containerd.WithImage(image),
+		containerId,
+		containerd.WithNewSnapshotView(containerId, image),
 		containerd.WithNewSpec(oci.WithImageConfig(image)),
 	)
 	if err != nil {
@@ -53,7 +49,7 @@ func (m *Manager) StartChild() error {
 
 	m.container = container
 
-	task, err := container.NewTask(m.ctx, cio.NewCreator(cio.WithStdio))
+	task, err := container.NewTask(m.ctx, cio.NullIO)
 	if err != nil {
 		return err
 	}
@@ -70,6 +66,10 @@ func (m *Manager) StartChild() error {
 	}
 
 	return nil
+}
+
+func (m *Manager) GetImage(name string) (containerd.Image, error) {
+	return m.client.GetImage(m.ctx, name)
 }
 
 func (m *Manager) ListImages() ([]containerd.Image, error) {
@@ -91,21 +91,22 @@ func (m *Manager) End() error {
 			return err
 		}
 
-		status := <-m.taskExitChan
-		_, _, err = status.Result()
+		<-m.taskExitChan
+
+		_, err = m.task.Delete(m.ctx)
 		if err != nil {
 			return err
 		}
 	}
 
 	if m.container != nil {
-		m.container.Delete(m.ctx)
+		m.container.Delete(m.ctx, containerd.WithSnapshotCleanup)
 	}
 
-	m.client.Close()
 	return nil
 }
 
-func ContainerdClient() (*containerd.Client, error) {
-	return containerd.New("/run/containerd/containerd.sock")
+func (m *Manager) CleanSnapshot(name string) error {
+	sservice := m.client.SnapshotService("overlayfs")
+	return sservice.Remove(m.ctx, name)
 }

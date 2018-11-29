@@ -2,6 +2,14 @@
 
 
 [[projects]]
+  branch = "containerd-process-poc"
+  digest = "1:2c376bb03e066dec5f3bfb05da3e82c073b35bf4a51962d0825fc0f948a828f1"
+  name = "code.cloudfoundry.org/guardian"
+  packages = ["gqt/containerdrunner"]
+  pruneopts = "UT"
+  revision = "f15c262e3e55efbd026a0084aeb5f0ca03ad2b41"
+
+[[projects]]
   digest = "1:f9ae348e1f793dcf9ed930ed47136a67343dbd6809c5c91391322267f4476892"
   name = "github.com/Microsoft/go-winio"
   packages = ["."]
@@ -31,6 +39,14 @@
   pruneopts = "UT"
   revision = "5b3eff572681588b6ce3df295d3d23b72f053f32"
   version = "v0.7.12"
+
+[[projects]]
+  digest = "1:9f3b30d9f8e0d7040f729b82dcbc8f0dead820a133b3147ce355fc451f32d761"
+  name = "github.com/burntsushi/toml"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "3012a1dbe2e4bd1391d42b32f0577cb7bbc7f005"
+  version = "v0.3.1"
 
 [[projects]]
   digest = "1:2070c7b1dd74bbabf466f7d31b37bb9c25e9da2eed2a71191f5e812b13094e55"
@@ -215,11 +231,13 @@
   version = "v1.7.0"
 
 [[projects]]
-  digest = "1:7a137fb7718928e473b7d805434ae563ec41790d3d227cdc64e8b14d1cab8a1f"
+  digest = "1:b4764603c54d74435f246901248aefb2b9d430bb7b160afde1afc41d89d48f1a"
   name = "github.com/onsi/gomega"
   packages = [
     ".",
     "format",
+    "gbytes",
+    "gexec",
     "internal/assertion",
     "internal/asyncassertion",
     "internal/oraclematcher",
@@ -437,7 +455,12 @@
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
+    "code.cloudfoundry.org/guardian/gqt/containerdrunner",
+    "github.com/burntsushi/toml",
     "github.com/containerd/containerd",
+    "github.com/containerd/containerd/cio",
+    "github.com/containerd/containerd/namespaces",
+    "github.com/containerd/containerd/oci",
     "github.com/onsi/ginkgo",
     "github.com/onsi/gomega",
   ]
