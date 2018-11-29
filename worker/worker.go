@@ -68,6 +68,18 @@ func (m *Manager) StartChild() error {
 	return nil
 }
 
+func (m *Manager) AttachChild() error {
+	return syscall.PtraceAttach(int(m.task.Pid()))
+}
+
+func (m *Manager) DetachChild() error {
+	return syscall.PtraceDetach(int(m.task.Pid()))
+}
+
+func (m *Manager) ContinueChild() error {
+	return syscall.PtraceCont(int(m.task.Pid()), 0)
+}
+
 func (m *Manager) GetImage(name string) (containerd.Image, error) {
 	return m.client.GetImage(m.ctx, name)
 }

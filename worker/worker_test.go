@@ -16,12 +16,12 @@ var _ = Describe("Worker Manager", func() {
 		var err error
 		id := strconv.Itoa(GinkgoParallelNode())
 		manager, err = NewManager(id, client)
-		Expect(err).To(BeNil())
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	AfterEach(func() {
 		err := manager.End()
-		Expect(err).To(BeNil())
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	It("has an id", func() {
@@ -29,22 +29,33 @@ var _ = Describe("Worker Manager", func() {
 		Expect(manager.ID).NotTo(Equal(""))
 	})
 
-	Describe("CreateContainer", func() {
+	Describe("StartChild", func() {
 		BeforeEach(func() {
 			Expect(manager.StartChild()).To(Succeed())
 		})
 
 		It("pulls the ptrace image", func() {
 			_, err := manager.GetImage("docker.io/ostenbom/ptrace-sleep:latest")
-			Expect(err).To(BeNil())
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("creates a child with a pid", func() {
 			pid, err := manager.ChildPid()
-			Expect(err).To(BeNil())
+			Expect(err).NotTo(HaveOccurred())
 			Expect(pid >= 0)
 		})
+	})
 
+	Describe("Ptracing", func() {
+		BeforeEach(func() {
+			Expect(manager.StartChild()).To(Succeed())
+		})
+
+		It("Can attach, continue and detach", func() {
+			Expect(manager.AttachChild()).To(Succeed())
+			Expect(manager.ContinueChild()).To(Succeed())
+			Expect(manager.DetachChild()).To(Succeed())
+		})
 	})
 
 })
