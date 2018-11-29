@@ -15,14 +15,14 @@ func NewManager(id string, client *containerd.Client) (*Manager, error) {
 	ctx := namespaces.WithNamespace(context.Background(), "refunction-worker"+id)
 
 	return &Manager{
-		Id:     id,
+		ID:     id,
 		client: client,
 		ctx:    ctx,
 	}, nil
 }
 
 type Manager struct {
-	Id           string
+	ID           string
 	client       *containerd.Client
 	ctx          context.Context
 	container    containerd.Container
@@ -36,11 +36,11 @@ func (m *Manager) StartChild() error {
 		return err
 	}
 
-	containerId := "ptrace-sleep-" + m.Id
+	containerID := "ptrace-sleep-" + m.ID
 	container, err := m.client.NewContainer(
 		m.ctx,
-		containerId,
-		containerd.WithNewSnapshotView(containerId, image),
+		containerID,
+		containerd.WithNewSnapshotView(containerID, image),
 		containerd.WithNewSpec(oci.WithImageConfig(image)),
 	)
 	if err != nil {

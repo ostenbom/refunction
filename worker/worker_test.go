@@ -25,8 +25,8 @@ var _ = Describe("Worker Manager", func() {
 	})
 
 	It("has an id", func() {
-		Expect(manager.Id).NotTo(BeNil())
-		Expect(manager.Id).NotTo(Equal(""))
+		Expect(manager.ID).NotTo(BeNil())
+		Expect(manager.ID).NotTo(Equal(""))
 	})
 
 	Describe("CreateContainer", func() {
