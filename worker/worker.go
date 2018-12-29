@@ -69,7 +69,13 @@ func (m *Manager) StartChild() error {
 }
 
 func (m *Manager) AttachChild() error {
-	return syscall.PtraceAttach(int(m.task.Pid()))
+	err := syscall.PtraceAttach(int(m.task.Pid()))
+	if err != nil {
+		return err
+	}
+
+	_, err = syscall.Wait4(int(m.task.Pid()), nil, 0, nil)
+	return err
 }
 
 func (m *Manager) DetachChild() error {
@@ -98,7 +104,7 @@ func (m *Manager) ChildPid() (uint32, error) {
 
 func (m *Manager) End() error {
 	if m.task != nil {
-		err := m.task.Kill(m.ctx, syscall.SIGTERM)
+		err := m.task.Kill(m.ctx, syscall.SIGKILL)
 		if err != nil {
 			return err
 		}
