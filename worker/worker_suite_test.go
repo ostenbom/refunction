@@ -17,6 +17,7 @@ import (
 
 var (
 	runDir string
+	config containerdrunner.Config
 	client *containerd.Client
 	server *exec.Cmd
 )
@@ -30,7 +31,7 @@ var _ = BeforeEach(func() {
 	runDir, err := ioutil.TempDir("", "")
 	Expect(err).NotTo(HaveOccurred())
 
-	config := containerdrunner.ContainerdConfig(runDir)
+	config = containerdrunner.ContainerdConfig(runDir)
 	server = NewServer(runDir, config)
 
 	client, err = GetContainerdClient(config.GRPC.Address)

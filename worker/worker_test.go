@@ -1,9 +1,11 @@
 package worker_test
 
 import (
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
+	"syscall"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -31,7 +33,7 @@ var _ = Describe("Worker Manager", func() {
 		Expect(manager.ID).NotTo(Equal(""))
 	})
 
-	Describe("StartChild", func() {
+	Describe("StartChild - ptrace-sleep", func() {
 		BeforeEach(func() {
 			Expect(manager.StartChild()).To(Succeed())
 		})
@@ -46,6 +48,28 @@ var _ = Describe("Worker Manager", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(pid >= 0)
 		})
+
+		It("does not create the count file", func() {
+			countLocation := config.State + "io.containerd.runtime.v1.linux/refunction-worker1/ptrace-sleep-1/rootfs/home/count.txt"
+
+			if _, err := os.Stat(countLocation); !os.IsNotExist(err) {
+				Fail("count file exists without SIGUSR1")
+			}
+		})
+
+		It("creates the count file after SIGUSR1", func() {
+			pid, err := manager.ChildPid()
+			Expect(err).NotTo(HaveOccurred())
+
+			err = syscall.Kill(int(pid), syscall.SIGUSR1)
+			Expect(err).NotTo(HaveOccurred())
+
+			countLocation := config.State + "io.containerd.runtime.v1.linux/refunction-worker1/ptrace-sleep-1/rootfs/count.txt"
+
+			if _, err := os.Stat(countLocation); os.IsNotExist(err) {
+				Fail("count file does not exist after SIGUSR1")
+			}
+		})
 	})
 
 	Describe("Ptracing", func() {
@@ -53,26 +77,32 @@ var _ = Describe("Worker Manager", func() {
 			Expect(manager.StartChild()).To(Succeed())
 		})
 
-		It("Can attach and detach", func() {
+		It("can attach and detach", func() {
 			Expect(manager.AttachChild()).To(Succeed())
 			Expect(manager.DetachChild()).To(Succeed())
 		})
 
-		It("Leaves the process in a stopped state after attaching", func() {
+		It("ceaves the process in a stopped state after attaching", func() {
 			Expect(manager.AttachChild()).To(Succeed())
 
 			pid, err := manager.ChildPid()
 			Expect(err).NotTo(HaveOccurred())
 
-			psArgs := []string{"-p", strconv.Itoa(int(pid)), "-o", "stat="}
-			processState, err := exec.Command("ps", psArgs...).Output()
-			Expect(err).NotTo(HaveOccurred())
+			processState := getPidState(pid)
 
 			// t = stopped by debugger. T = stopped by signal
-			Expect(strings.Contains(string(processState), "t")).To(BeTrue())
+			Expect(strings.Contains(processState, "t")).To(BeTrue())
 
 			Expect(manager.DetachChild()).To(Succeed())
 		})
 	})
 
 })
+
+func getPidState(pid uint32) string {
+	psArgs := []string{"-p", strconv.Itoa(int(pid)), "-o", "stat="}
+	processState, err := exec.Command("ps", psArgs...).Output()
+	Expect(err).NotTo(HaveOccurred())
+
+	return string(processState)
+}

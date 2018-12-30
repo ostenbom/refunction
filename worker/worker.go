@@ -40,7 +40,7 @@ func (m *Manager) StartChild() error {
 	container, err := m.client.NewContainer(
 		m.ctx,
 		containerID,
-		containerd.WithNewSnapshotView(containerID, image),
+		containerd.WithNewSnapshot(containerID, image),
 		containerd.WithNewSpec(oci.WithImageConfig(image)),
 	)
 	if err != nil {
