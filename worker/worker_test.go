@@ -50,7 +50,7 @@ var _ = Describe("Worker Manager", func() {
 		})
 
 		It("does not create the count file", func() {
-			countLocation := config.State + "io.containerd.runtime.v1.linux/refunction-worker1/ptrace-sleep-1/rootfs/home/count.txt"
+			countLocation := config.State + "/io.containerd.runtime.v1.linux/refunction-worker1/ptrace-sleep-1/rootfs/home/count.txt"
 
 			if _, err := os.Stat(countLocation); !os.IsNotExist(err) {
 				Fail("count file exists without SIGUSR1")
@@ -61,14 +61,16 @@ var _ = Describe("Worker Manager", func() {
 			pid, err := manager.ChildPid()
 			Expect(err).NotTo(HaveOccurred())
 
+			// Send custom "ready" signal to container
 			err = syscall.Kill(int(pid), syscall.SIGUSR1)
 			Expect(err).NotTo(HaveOccurred())
 
-			countLocation := config.State + "io.containerd.runtime.v1.linux/refunction-worker1/ptrace-sleep-1/rootfs/count.txt"
+			countLocation := config.State + "/io.containerd.runtime.v1.linux/refunction-worker1/ptrace-sleep-1/rootfs/count.txt"
 
-			if _, err := os.Stat(countLocation); os.IsNotExist(err) {
-				Fail("count file does not exist after SIGUSR1")
-			}
+			Eventually(func() bool {
+				_, err := os.Stat(countLocation)
+				return os.IsNotExist(err)
+			}).Should(BeFalse())
 		})
 	})
 
@@ -82,7 +84,7 @@ var _ = Describe("Worker Manager", func() {
 			Expect(manager.DetachChild()).To(Succeed())
 		})
 
-		It("ceaves the process in a stopped state after attaching", func() {
+		It("creates the process in a stopped state after attaching", func() {
 			Expect(manager.AttachChild()).To(Succeed())
 
 			pid, err := manager.ChildPid()
