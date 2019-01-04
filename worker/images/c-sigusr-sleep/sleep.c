@@ -26,7 +26,6 @@ int main() {
   sigfillset (&block_mask);
   usr_action.sa_handler = synch_signal;
   usr_action.sa_mask = block_mask;
-  usr_action.sa_flags = 0;
   sigaction (SIGUSR1, &usr_action, NULL);
 
   sigset_t mask, oldmask;

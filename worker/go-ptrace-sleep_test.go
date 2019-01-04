@@ -5,7 +5,6 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
-	"syscall"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -13,13 +12,14 @@ import (
 	. "github.com/ostenbom/refunction/worker"
 )
 
-var _ = Describe("Worker Manager", func() {
+var _ = Describe("Worker Manager using ptrace-sleep image", func() {
 	var manager *Manager
+	image := "docker.io/ostenbom/ptrace-sleep:latest"
 
 	BeforeEach(func() {
 		var err error
 		id := strconv.Itoa(GinkgoParallelNode())
-		manager, err = NewManager(id, client)
+		manager, err = NewManager(id, client, "ptrace-sleep", image)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -49,7 +49,7 @@ var _ = Describe("Worker Manager", func() {
 			Expect(pid >= 0)
 		})
 
-		It("does not create the count file", func() {
+		It("does not create the count file on start", func() {
 			countLocation := config.State + "/io.containerd.runtime.v1.linux/refunction-worker1/ptrace-sleep-1/rootfs/home/count.txt"
 
 			if _, err := os.Stat(countLocation); !os.IsNotExist(err) {
@@ -58,11 +58,8 @@ var _ = Describe("Worker Manager", func() {
 		})
 
 		It("creates the count file after SIGUSR1", func() {
-			pid, err := manager.ChildPid()
-			Expect(err).NotTo(HaveOccurred())
-
 			// Send custom "ready" signal to container
-			err = syscall.Kill(int(pid), syscall.SIGUSR1)
+			err := manager.SendEnableSignal()
 			Expect(err).NotTo(HaveOccurred())
 
 			countLocation := config.State + "/io.containerd.runtime.v1.linux/refunction-worker1/ptrace-sleep-1/rootfs/count.txt"
@@ -84,7 +81,7 @@ var _ = Describe("Worker Manager", func() {
 			Expect(manager.DetachChild()).To(Succeed())
 		})
 
-		It("creates the process in a stopped state after attaching", func() {
+		It("is in a stopped state after attaching", func() {
 			Expect(manager.AttachChild()).To(Succeed())
 
 			pid, err := manager.ChildPid()
