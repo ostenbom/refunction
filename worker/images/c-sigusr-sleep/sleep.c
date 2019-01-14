@@ -20,6 +20,13 @@ synch_signal (int sig) {
 int main() {
   printf("starting\n");
 
+  int action_success;
+  struct sigaction chld_action;
+
+  action_success = sigaction(SIGCHLD, NULL, &chld_action);
+  chld_action.sa_flags |= SA_NOCLDWAIT;
+  action_success = sigaction(SIGCHLD, &chld_action, NULL);
+
   struct sigaction usr_action;
   sigset_t block_mask;
 
