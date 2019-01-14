@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 
@@ -28,7 +29,8 @@ func TestWorker(t *testing.T) {
 }
 
 var _ = BeforeEach(func() {
-	runDir, err := ioutil.TempDir("", "")
+	var err error
+	runDir, err = ioutil.TempDir("", "")
 	Expect(err).NotTo(HaveOccurred())
 
 	config = containerdrunner.ContainerdConfig(runDir)
@@ -47,8 +49,17 @@ var _ = AfterEach(func() {
 	_, err = server.Process.Wait()
 	Expect(err).NotTo(HaveOccurred())
 
-	Expect(os.RemoveAll(runDir)).To(Succeed())
+	// Attempt to unmount, ignoring errors
+	out, _ := exec.Command("grep", runDir, "/proc/mounts").Output()
+	if string(out) != "" {
+		mount := strings.Fields(string(out))[1]
+		_, err := exec.Command("umount", "-r", mount).Output()
+		Expect(err).NotTo(HaveOccurred())
+	}
 
+	Expect(os.RemoveAll(runDir)).To(Succeed())
+	// Ignore errors
+	os.RemoveAll("/var/run/containerd/runc/refunction-worker1")
 })
 
 func NewServer(runDir string, config containerdrunner.Config) *exec.Cmd {

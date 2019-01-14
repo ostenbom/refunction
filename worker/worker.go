@@ -3,10 +3,12 @@ package worker
 import (
 	"context"
 	"errors"
+	"fmt"
 	"syscall"
 
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/cio"
+	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/oci"
 )
@@ -87,8 +89,18 @@ func (m *Manager) AttachChild() error {
 	return err
 }
 
-func (m *Manager) DetachChild() error {
-	err := syscall.PtraceDetach(int(m.task.Pid()))
+func (m *Manager) StopDetachChild() error {
+	err := syscall.Kill(int(m.task.Pid()), syscall.SIGSTOP)
+	if err != nil {
+		return err
+	}
+
+	_, err = syscall.Wait4(int(m.task.Pid()), nil, 0, nil)
+	if err != nil {
+		return err
+	}
+
+	err = syscall.PtraceDetach(int(m.task.Pid()))
 	if err != nil {
 		return err
 	}
@@ -97,14 +109,14 @@ func (m *Manager) DetachChild() error {
 	return nil
 }
 
-func (m *Manager) EnterTraceStop() error {
-	err := syscall.Kill(int(m.task.Pid()), syscall.SIGSTOP)
+func (m *Manager) DetachChild() error {
+	err := syscall.PtraceDetach(int(m.task.Pid()))
 	if err != nil {
 		return err
 	}
 
-	_, err = syscall.Wait4(int(m.task.Pid()), nil, 0, nil)
-	return err
+	m.attached = false
+	return nil
 }
 
 func (m *Manager) SendEnableSignal() error {
@@ -158,14 +170,16 @@ func (m *Manager) ChildPid() (uint32, error) {
 
 func (m *Manager) End() error {
 	if m.task != nil {
-		err := m.task.Kill(m.ctx, syscall.SIGKILL)
-		if err != nil {
-			return err
+		if err := m.task.Kill(m.ctx, syscall.SIGKILL); err != nil {
+			if errdefs.IsFailedPrecondition(err) || errdefs.IsNotFound(err) {
+				return nil
+			}
+			return fmt.Errorf("failed to kill in manager end: %s", err)
 		}
 
 		<-m.taskExitChan
 
-		_, err = m.task.Delete(m.ctx)
+		_, err := m.task.Delete(m.ctx)
 		if err != nil {
 			return err
 		}

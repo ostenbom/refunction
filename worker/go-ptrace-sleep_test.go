@@ -12,7 +12,7 @@ import (
 	. "github.com/ostenbom/refunction/worker"
 )
 
-var _ = Describe("Worker Manager using ptrace-sleep image", func() {
+var _ = Describe("Worker Manager using go-ptrace-sleep image", func() {
 	var manager *Manager
 	image := "docker.io/ostenbom/ptrace-sleep:latest"
 
@@ -33,7 +33,7 @@ var _ = Describe("Worker Manager using ptrace-sleep image", func() {
 		Expect(manager.ID).NotTo(Equal(""))
 	})
 
-	Describe("StartChild - ptrace-sleep", func() {
+	Describe("StartChild - go-ptrace-sleep", func() {
 		BeforeEach(func() {
 			Expect(manager.StartChild()).To(Succeed())
 		})
