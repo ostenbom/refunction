@@ -1,7 +1,9 @@
 package worker
 
 import (
+	"bufio"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"syscall"
@@ -23,14 +25,48 @@ type State struct {
 	memoryLocations []*Memory
 }
 
-func NewMemory(memoryData []string) (*Memory, error) {
-	var name string
-	if len(memoryData) >= 6 {
-		name = memoryData[5]
-	} else {
-		name = ""
+func NewMemoryLocations(pid int) ([]*Memory, error) {
+	var memoryLocations []*Memory
+
+	maps, err := os.Open(fmt.Sprintf("/proc/%d/maps", pid))
+	if err != nil {
+		return nil, fmt.Errorf("could not open maps file: %s", err)
+	}
+	defer maps.Close()
+
+	scanner := bufio.NewScanner(maps)
+	for scanner.Scan() {
+		memoryLine := scanner.Text()
+		memoryData := strings.Fields(memoryLine)
+
+		var name string
+		if len(memoryData) >= 6 {
+			name = memoryData[5]
+		} else {
+			name = ""
+		}
+
+		// These are kernel owned and can be skipped
+		if name == "[vvar]" || name == "[vdso]" || name == "[vsyscall]" {
+			continue
+		}
+
+		memory, err := parseMemoryData(name, memoryData)
+		if err != nil {
+			return nil, err
+		}
+
+		memoryLocations = append(memoryLocations, memory)
 	}
 
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("could not scan maps file: %s", err)
+	}
+
+	return memoryLocations, nil
+}
+
+func parseMemoryData(name string, memoryData []string) (*Memory, error) {
 	// Offset format 55b4969c1000-55b4969c2000
 	offsets := strings.Split(memoryData[0], "-")
 	// Device format fc:00

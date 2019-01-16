@@ -1,14 +1,11 @@
 package worker
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"os"
 	"runtime"
-	"strings"
 	"syscall"
 
 	"github.com/containerd/containerd"
@@ -178,40 +175,11 @@ func (m *Worker) GetState() (*State, error) {
 		return nil, fmt.Errorf("could not get regs: %s", err)
 	}
 
-	maps, err := os.Open(fmt.Sprintf("/proc/%d/maps", m.task.Pid()))
+	memoryLocations, err := NewMemoryLocations(int(m.task.Pid()))
 	if err != nil {
-		return nil, fmt.Errorf("could not open maps file: %s", err)
+		return nil, fmt.Errorf("could not get memory locations: %s", err)
 	}
-	defer maps.Close()
-
-	scanner := bufio.NewScanner(maps)
-	for scanner.Scan() {
-		memoryLine := scanner.Text()
-		memoryData := strings.Fields(memoryLine)
-
-		var name string
-		if len(memoryData) >= 6 {
-			name = memoryData[5]
-		} else {
-			name = ""
-		}
-
-		// These are kernel owned and can be skipped
-		if name == "[vvar]" || name == "[vdso]" || name == "[vsyscall]" {
-			continue
-		}
-
-		memory, err := NewMemory(memoryData)
-		if err != nil {
-			return nil, err
-		}
-
-		state.memoryLocations = append(state.memoryLocations, memory)
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("could not scan maps file: %s", err)
-	}
+	state.memoryLocations = memoryLocations
 
 	return &state, nil
 }
