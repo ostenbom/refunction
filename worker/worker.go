@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"runtime"
 	"syscall"
 
 	"github.com/containerd/containerd"
@@ -78,6 +80,9 @@ func (m *Manager) StartChild() error {
 }
 
 func (m *Manager) AttachChild() error {
+	// Crucial: trying to detach from a different thread
+	// than the attacher causes undefined behaviour
+	runtime.LockOSThread()
 	err := syscall.PtraceAttach(int(m.task.Pid()))
 	if err != nil {
 		return err
@@ -106,6 +111,7 @@ func (m *Manager) StopDetachChild() error {
 	}
 
 	m.attached = false
+	runtime.UnlockOSThread()
 	return nil
 }
 
@@ -166,6 +172,16 @@ func (m *Manager) ChildPid() (uint32, error) {
 	}
 
 	return m.task.Pid(), nil
+}
+
+func (m *Manager) PrintChildStack() error {
+	stack, err := ioutil.ReadFile(fmt.Sprintf("/proc/%d/stack", int(m.task.Pid())))
+	if err != nil {
+		return fmt.Errorf("could not read child /proc/pid/stack file: %s", err)
+	}
+
+	fmt.Println(string(stack))
+	return nil
 }
 
 func (m *Manager) End() error {

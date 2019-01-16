@@ -98,7 +98,8 @@ var _ = Describe("Worker Manager using sigusr-sleep image", func() {
 				return os.IsNotExist(err)
 			}).Should(BeFalse())
 
-			Expect(manager.StopDetachChild()).To(Succeed())
+			err = manager.StopDetachChild()
+			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 
