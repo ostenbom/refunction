@@ -50,7 +50,7 @@ var _ = Describe("Worker Manager using go-ptrace-sleep image", func() {
 		})
 
 		It("does not create the count file on start", func() {
-			countLocation := config.State + "/io.containerd.runtime.v1.linux/refunction-worker1/ptrace-sleep-1/rootfs/home/count.txt"
+			countLocation := getRootfs(manager, "ptrace-sleep") + "count.txt"
 
 			if _, err := os.Stat(countLocation); !os.IsNotExist(err) {
 				Fail("count file exists without SIGUSR1")
@@ -62,7 +62,7 @@ var _ = Describe("Worker Manager using go-ptrace-sleep image", func() {
 			err := manager.SendEnableSignal()
 			Expect(err).NotTo(HaveOccurred())
 
-			countLocation := config.State + "/io.containerd.runtime.v1.linux/refunction-worker1/ptrace-sleep-1/rootfs/count.txt"
+			countLocation := getRootfs(manager, "ptrace-sleep") + "count.txt"
 
 			Eventually(func() bool {
 				_, err := os.Stat(countLocation)

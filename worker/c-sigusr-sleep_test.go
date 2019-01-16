@@ -1,6 +1,7 @@
 package worker_test
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -39,7 +40,7 @@ var _ = Describe("Worker Manager using sigusr-sleep image", func() {
 		})
 
 		It("does not create the count file on start", func() {
-			countLocation := config.State + "/io.containerd.runtime.v1.linux/refunction-worker1/sigusr-sleep-1/rootfs/count.txt"
+			countLocation := getRootfs(manager, "sigusr-sleep") + "count.txt"
 
 			if _, err := os.Stat(countLocation); !os.IsNotExist(err) {
 				Fail("count file exists without SIGUSR1")
@@ -51,7 +52,7 @@ var _ = Describe("Worker Manager using sigusr-sleep image", func() {
 			err := manager.SendEnableSignal()
 			Expect(err).NotTo(HaveOccurred())
 
-			countLocation := config.State + "/io.containerd.runtime.v1.linux/refunction-worker1/sigusr-sleep-1/rootfs/count.txt"
+			countLocation := getRootfs(manager, "sigusr-sleep") + "count.txt"
 
 			Eventually(func() bool {
 				_, err := os.Stat(countLocation)
@@ -91,10 +92,10 @@ var _ = Describe("Worker Manager using sigusr-sleep image", func() {
 			err := manager.SendEnableSignal()
 			Expect(err).NotTo(HaveOccurred())
 
-			countLocation := config.State + "/io.containerd.runtime.v1.linux/refunction-worker1/sigusr-sleep-1/rootfs/count.txt"
+			countLocation := getRootfs(manager, "sigusr-sleep") + "count.txt"
 
 			Eventually(func() bool {
-				_, err := os.Stat(countLocation)
+				_, err = os.Stat(countLocation)
 				return os.IsNotExist(err)
 			}).Should(BeFalse())
 
@@ -104,3 +105,7 @@ var _ = Describe("Worker Manager using sigusr-sleep image", func() {
 	})
 
 })
+
+func getRootfs(manager *Manager, imageName string) string {
+	return fmt.Sprintf("%s/io.containerd.runtime.v1.linux/refunction-worker%s/%s-%s/rootfs/", config.State, manager.ID, imageName, manager.ID)
+}
