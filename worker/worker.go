@@ -1,11 +1,14 @@
 package worker
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"runtime"
+	"strings"
 	"syscall"
 
 	"github.com/containerd/containerd"
@@ -15,10 +18,10 @@ import (
 	"github.com/containerd/containerd/oci"
 )
 
-func NewManager(id string, client *containerd.Client, childID string, image string) (*Manager, error) {
+func NewWorker(id string, client *containerd.Client, childID string, image string) (*Worker, error) {
 	ctx := namespaces.WithNamespace(context.Background(), "refunction-worker"+id)
 
-	return &Manager{
+	return &Worker{
 		ID:      id,
 		childID: childID,
 		image:   image,
@@ -27,7 +30,7 @@ func NewManager(id string, client *containerd.Client, childID string, image stri
 	}, nil
 }
 
-type Manager struct {
+type Worker struct {
 	ID           string
 	childID      string
 	image        string
@@ -37,9 +40,10 @@ type Manager struct {
 	task         containerd.Task
 	taskExitChan <-chan containerd.ExitStatus
 	attached     bool
+	stopped      bool
 }
 
-func (m *Manager) StartChild() error {
+func (m *Worker) StartChild() error {
 	image, err := m.client.Pull(m.ctx, m.image, containerd.WithPullUnpack)
 	if err != nil {
 		return err
@@ -75,11 +79,12 @@ func (m *Manager) StartChild() error {
 	}
 
 	m.attached = false
+	m.stopped = false
 
 	return nil
 }
 
-func (m *Manager) AttachChild() error {
+func (m *Worker) Attach() error {
 	// Crucial: trying to detach from a different thread
 	// than the attacher causes undefined behaviour
 	runtime.LockOSThread()
@@ -89,26 +94,20 @@ func (m *Manager) AttachChild() error {
 	}
 
 	m.attached = true
+	m.stopped = true
 
 	_, err = syscall.Wait4(int(m.task.Pid()), nil, 0, nil)
 	return err
 }
 
-func (m *Manager) StopDetachChild() error {
-	err := syscall.Kill(int(m.task.Pid()), syscall.SIGSTOP)
-	if err != nil {
-		return err
+func (m *Worker) Detach() error {
+	if !m.stopped {
+		err := m.Stop()
+		if err != nil {
+			return fmt.Errorf("could not stop child for detach: %s", err)
+		}
 	}
 
-	_, err = syscall.Wait4(int(m.task.Pid()), nil, 0, nil)
-	if err != nil {
-		return err
-	}
-
-	return m.DetachChild()
-}
-
-func (m *Manager) DetachChild() error {
 	err := syscall.PtraceDetach(int(m.task.Pid()))
 	if err != nil {
 		return err
@@ -119,7 +118,23 @@ func (m *Manager) DetachChild() error {
 	return nil
 }
 
-func (m *Manager) SendEnableSignal() error {
+func (m *Worker) Stop() error {
+	err := syscall.Kill(int(m.task.Pid()), syscall.SIGSTOP)
+	if err != nil {
+		return err
+	}
+
+	_, err = syscall.Wait4(int(m.task.Pid()), nil, 0, nil)
+	m.stopped = true
+	return err
+}
+
+func (m *Worker) Continue() error {
+	m.stopped = false
+	return syscall.PtraceCont(int(m.task.Pid()), 0)
+}
+
+func (m *Worker) SendEnableSignal() error {
 	pid, err := m.ChildPid()
 	if err != nil {
 		return err
@@ -148,19 +163,68 @@ func (m *Manager) SendEnableSignal() error {
 	return syscall.PtraceCont(int(pid), int(waitStat.StopSignal()))
 }
 
-func (m *Manager) ContinueChild() error {
-	return syscall.PtraceCont(int(m.task.Pid()), 0)
+func (m *Worker) GetState() (*State, error) {
+	if !m.stopped {
+		err := m.Stop()
+		if err != nil {
+			return nil, fmt.Errorf("could not stop child for regs print: %s", err)
+		}
+		defer m.Continue()
+	}
+
+	var state State
+	err := syscall.PtraceGetRegs(int(m.task.Pid()), &state.registers)
+	if err != nil {
+		return nil, fmt.Errorf("could not get regs: %s", err)
+	}
+
+	maps, err := os.Open(fmt.Sprintf("/proc/%d/maps", m.task.Pid()))
+	if err != nil {
+		return nil, fmt.Errorf("could not open maps file: %s", err)
+	}
+	defer maps.Close()
+
+	scanner := bufio.NewScanner(maps)
+	for scanner.Scan() {
+		memoryLine := scanner.Text()
+		memoryData := strings.Fields(memoryLine)
+
+		var name string
+		if len(memoryData) >= 6 {
+			name = memoryData[5]
+		} else {
+			name = ""
+		}
+
+		// These are kernel owned and can be skipped
+		if name == "[vvar]" || name == "[vdso]" || name == "[vsyscall]" {
+			continue
+		}
+
+		memory, err := NewMemory(memoryData)
+		if err != nil {
+			return nil, err
+		}
+
+		state.memoryLocations = append(state.memoryLocations, memory)
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("could not scan maps file: %s", err)
+	}
+
+	return &state, nil
 }
 
-func (m *Manager) GetImage(name string) (containerd.Image, error) {
+func (m *Worker) GetImage(name string) (containerd.Image, error) {
 	return m.client.GetImage(m.ctx, name)
 }
 
-func (m *Manager) ListImages() ([]containerd.Image, error) {
+func (m *Worker) ListImages() ([]containerd.Image, error) {
 	return m.client.ListImages(m.ctx)
 }
 
-func (m *Manager) ChildPid() (uint32, error) {
+func (m *Worker) ChildPid() (uint32, error) {
 	if m.task == nil {
 		return 0, errors.New("child not initialized")
 	}
@@ -168,17 +232,43 @@ func (m *Manager) ChildPid() (uint32, error) {
 	return m.task.Pid(), nil
 }
 
-func (m *Manager) PrintChildStack() error {
-	stack, err := ioutil.ReadFile(fmt.Sprintf("/proc/%d/stack", int(m.task.Pid())))
+func (m *Worker) PrintStack() error {
+	return m.printProcFile("stack")
+}
+
+func (m *Worker) PrintMaps() error {
+	return m.printProcFile("maps")
+}
+
+func (m *Worker) printProcFile(fileName string) error {
+	stack, err := ioutil.ReadFile(fmt.Sprintf("/proc/%d/%s", int(m.task.Pid()), fileName))
 	if err != nil {
-		return fmt.Errorf("could not read child /proc/pid/stack file: %s", err)
+		return fmt.Errorf("could not read child /proc/pid/%s file: %s", fileName, err)
 	}
 
 	fmt.Println(string(stack))
 	return nil
 }
 
-func (m *Manager) End() error {
+func (m *Worker) PrintRegs() error {
+	err := m.Stop()
+	if err != nil {
+		return fmt.Errorf("could not stop child for regs print: %s", err)
+	}
+	defer m.Continue()
+
+	var regs syscall.PtraceRegs
+	err = syscall.PtraceGetRegs(int(m.task.Pid()), &regs)
+	if err != nil {
+		return fmt.Errorf("could not get regs: %s", err)
+	}
+
+	fmt.Printf("Regs: %+v\n", regs)
+
+	return nil
+}
+
+func (m *Worker) End() error {
 	if m.task != nil {
 		if err := m.task.Kill(m.ctx, syscall.SIGKILL); err != nil {
 			if errdefs.IsFailedPrecondition(err) || errdefs.IsNotFound(err) {
@@ -202,7 +292,7 @@ func (m *Manager) End() error {
 	return nil
 }
 
-func (m *Manager) CleanSnapshot(name string) error {
+func (m *Worker) CleanSnapshot(name string) error {
 	sservice := m.client.SnapshotService("overlayfs")
 	return sservice.Remove(m.ctx, name)
 }
