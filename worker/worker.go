@@ -105,14 +105,7 @@ func (m *Manager) StopDetachChild() error {
 		return err
 	}
 
-	err = syscall.PtraceDetach(int(m.task.Pid()))
-	if err != nil {
-		return err
-	}
-
-	m.attached = false
-	runtime.UnlockOSThread()
-	return nil
+	return m.DetachChild()
 }
 
 func (m *Manager) DetachChild() error {
@@ -122,6 +115,7 @@ func (m *Manager) DetachChild() error {
 	}
 
 	m.attached = false
+	runtime.UnlockOSThread()
 	return nil
 }
 
