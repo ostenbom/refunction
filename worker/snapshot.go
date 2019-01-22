@@ -1,16 +1,18 @@
 package worker
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"time"
 
 	"github.com/containerd/containerd"
+	"github.com/containerd/containerd/archive"
 	"github.com/containerd/containerd/mount"
 	"github.com/containerd/containerd/snapshots"
-	"github.com/openSUSE/umoci/oci/layer"
 )
 
 func NewSnapshotManager(client *containerd.Client, ctx context.Context) (*SnapshotManager, error) {
@@ -49,17 +51,19 @@ func (m *SnapshotManager) EnsureBaseLayer() error {
 	}
 	defer os.RemoveAll(tmpDir)
 
+	var opt = snapshots.WithLabels(map[string]string{
+		"containerd.io/gc.root": time.Now().UTC().Format(time.RFC3339),
+	})
 	// Start an empty base layer
 	emptyBaseKey := "emptybase"
-	mounts, err := m.snapshotter.Prepare(m.ctx, emptyBaseKey, "")
+	mounts, err := m.snapshotter.Prepare(m.ctx, emptyBaseKey, "", opt)
 	if err != nil {
 		return err
 	}
-	defer m.snapshotter.Remove(m.ctx, emptyBaseKey)
 
 	// Mount it to the tempdir
 	if err := mount.All(mounts, tmpDir); err != nil {
-		return err
+		return fmt.Errorf("all mount error: %s", err)
 	}
 	defer mount.UnmountAll(tmpDir, 0)
 
@@ -67,14 +71,22 @@ func (m *SnapshotManager) EnsureBaseLayer() error {
 	if err != nil {
 		return err
 	}
+	r := bufio.NewReader(layerTar)
 
-	err = layer.UnpackLayer(tmpDir, layerTar, nil)
+	_, err = archive.Apply(m.ctx, tmpDir, r)
 	if err != nil {
-		return err
+		return fmt.Errorf("could not apply error: %s", err)
 	}
-	time.Sleep(time.Minute)
 
-	m.snapshotter.Commit(m.ctx, "alpine", emptyBaseKey)
+	// Read any trailing data
+	if _, err := io.Copy(ioutil.Discard, r); err != nil {
+		return fmt.Errorf("could not read trailing data: %s", err)
+	}
+
+	err = m.snapshotter.Commit(m.ctx, "alpine", emptyBaseKey, opt)
+	if err != nil {
+		return fmt.Errorf("commit error: %s", err)
+	}
 
 	return nil
 }
