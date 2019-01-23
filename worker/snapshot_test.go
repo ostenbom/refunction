@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/snapshots"
@@ -15,7 +16,7 @@ import (
 	. "github.com/ostenbom/refunction/worker"
 )
 
-var _ = Describe("Fs", func() {
+var _ = Describe("Snapshot manager", func() {
 	var snapshotter snapshots.Snapshotter
 	var ctx context.Context
 	baseName := "alpine"
@@ -50,6 +51,29 @@ var _ = Describe("Fs", func() {
 		})
 	})
 
+	Context("when there was a base layer", func() {
+		It("doesn't create any new layers", func() {
+			Expect(makeBaseLayer(ctx, snapshotter, baseName)).To(Succeed())
+
+			entriesBefore, err := getSnapshotEntries()
+			Expect(err).NotTo(HaveOccurred())
+
+			// first base name exists
+			info, err := snapshotter.Stat(ctx, baseName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(info.Name).To(Equal(baseName))
+
+			_, err = NewSnapshotManager(client, ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			// then nothing new was made
+			entriesAfter, err := getSnapshotEntries()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(len(entriesAfter)).To(Equal(len(entriesBefore)))
+		})
+	})
+
 })
 
 func getSnapshotEntries() ([]os.FileInfo, error) {
@@ -60,4 +84,20 @@ func getSnapshotEntries() ([]os.FileInfo, error) {
 	}
 
 	return entries, nil
+}
+
+func makeBaseLayer(ctx context.Context, snapshotter snapshots.Snapshotter, baseName string) error {
+	opt := snapshots.WithLabels(map[string]string{
+		"containerd.io/gc.root": time.Now().UTC().Format(time.RFC3339),
+	})
+	_, err := snapshotter.Prepare(ctx, "emptybase", "", opt)
+	if err != nil {
+		return err
+	}
+
+	err = snapshotter.Commit(ctx, baseName, "emptybase", opt)
+	if err != nil {
+		return err
+	}
+	return nil
 }

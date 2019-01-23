@@ -44,6 +44,11 @@ type SnapshotManager struct {
 }
 
 func (m *SnapshotManager) EnsureBaseLayer() error {
+	_, err := m.snapshotter.Stat(m.ctx, m.baseName)
+	if err == nil {
+		return nil
+	}
+
 	baseLayerPath := fmt.Sprintf("%s/alpine/layer.tar", m.layersPath)
 	tmpDir, err := ioutil.TempDir("", "snapshotmanager")
 	if err != nil {
@@ -51,7 +56,7 @@ func (m *SnapshotManager) EnsureBaseLayer() error {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	var opt = snapshots.WithLabels(map[string]string{
+	opt := snapshots.WithLabels(map[string]string{
 		"containerd.io/gc.root": time.Now().UTC().Format(time.RFC3339),
 	})
 	// Start an empty base layer
