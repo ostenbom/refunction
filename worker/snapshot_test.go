@@ -74,6 +74,41 @@ var _ = Describe("Snapshot manager", func() {
 		})
 	})
 
+	Context("when the manager has been created", func() {
+		var manager *SnapshotManager
+		var startEntries []os.FileInfo
+		BeforeEach(func() {
+			var err error
+			manager, err = NewSnapshotManager(client, ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			startEntries, err = getSnapshotEntries()
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("can create a layer on top of the base", func() {
+			layerName := "echo-hello"
+			err := manager.CreateLayerFromBase(layerName)
+			Expect(err).NotTo(HaveOccurred())
+
+			info, err := snapshotter.Stat(ctx, layerName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(info.Name).To(Equal(layerName))
+			Expect(info.Parent).To(Equal(baseName))
+
+			entriesAfter, err := getSnapshotEntries()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(len(entriesAfter)).To(Equal(len(startEntries) + 1))
+		})
+
+		It("can get rw mounts of a layer", func() {
+			mounts, err := manager.GetRwMounts("alpine", "mycontainer")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(mounts)).NotTo(Equal(0))
+		})
+	})
+
 })
 
 func getSnapshotEntries() ([]os.FileInfo, error) {

@@ -21,11 +21,16 @@ func NewSnapshotManager(client *containerd.Client, ctx context.Context) (*Snapsh
 		return nil, fmt.Errorf("could not get working directory: %s", err)
 	}
 
+	opt := snapshots.WithLabels(map[string]string{
+		"containerd.io/gc.root": time.Now().UTC().Format(time.RFC3339),
+	})
+
 	manager := SnapshotManager{
 		baseName:    "alpine",
 		ctx:         ctx,
 		layersPath:  fmt.Sprintf("%s/layers", workDir),
 		snapshotter: client.SnapshotService("overlayfs"),
+		noGc:        opt,
 	}
 
 	err = manager.EnsureBaseLayer()
@@ -41,38 +46,53 @@ type SnapshotManager struct {
 	ctx         context.Context
 	layersPath  string
 	snapshotter snapshots.Snapshotter
+	noGc        snapshots.Opt
 }
 
 func (m *SnapshotManager) EnsureBaseLayer() error {
-	_, err := m.snapshotter.Stat(m.ctx, m.baseName)
+	return m.createLayer(m.baseName, "")
+}
+
+func (m *SnapshotManager) CreateLayerFromBase(layerName string) error {
+	return m.createLayer(layerName, m.baseName)
+}
+
+func (m *SnapshotManager) GetRwMounts(layerName, containerName string) ([]mount.Mount, error) {
+	mounts, err := m.snapshotter.Prepare(m.ctx, containerName, layerName, m.noGc)
+	if err != nil {
+		return nil, err
+	}
+
+	return mounts, nil
+}
+
+func (m *SnapshotManager) createLayer(layerName, parentName string) error {
+	_, err := m.snapshotter.Stat(m.ctx, layerName)
 	if err == nil {
 		return nil
 	}
 
-	baseLayerPath := fmt.Sprintf("%s/alpine/layer.tar", m.layersPath)
+	layerPath := fmt.Sprintf("%s/%s/layer.tar", m.layersPath, layerName)
 	tmpDir, err := ioutil.TempDir("", "snapshotmanager")
 	if err != nil {
 		return err
 	}
 	defer os.RemoveAll(tmpDir)
 
-	opt := snapshots.WithLabels(map[string]string{
-		"containerd.io/gc.root": time.Now().UTC().Format(time.RFC3339),
-	})
-	// Start an empty base layer
-	emptyBaseKey := "emptybase"
-	mounts, err := m.snapshotter.Prepare(m.ctx, emptyBaseKey, "", opt)
+	activeLayerName := fmt.Sprintf("%s-active", layerName)
+	mounts, err := m.snapshotter.Prepare(m.ctx, activeLayerName, parentName, m.noGc)
 	if err != nil {
 		return err
 	}
 
 	// Mount it to the tempdir
-	if err := mount.All(mounts, tmpDir); err != nil {
+	err = mount.All(mounts, tmpDir)
+	if err != nil {
 		return fmt.Errorf("all mount error: %s", err)
 	}
 	defer mount.UnmountAll(tmpDir, 0)
 
-	layerTar, err := os.Open(baseLayerPath)
+	layerTar, err := os.Open(layerPath)
 	if err != nil {
 		return err
 	}
@@ -84,11 +104,12 @@ func (m *SnapshotManager) EnsureBaseLayer() error {
 	}
 
 	// Read any trailing data
-	if _, err := io.Copy(ioutil.Discard, r); err != nil {
+	_, err = io.Copy(ioutil.Discard, r)
+	if err != nil {
 		return fmt.Errorf("could not read trailing data: %s", err)
 	}
 
-	err = m.snapshotter.Commit(m.ctx, "alpine", emptyBaseKey, opt)
+	err = m.snapshotter.Commit(m.ctx, layerName, activeLayerName, m.noGc)
 	if err != nil {
 		return fmt.Errorf("commit error: %s", err)
 	}
