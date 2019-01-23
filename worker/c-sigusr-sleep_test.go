@@ -19,7 +19,7 @@ var _ = Describe("Worker Manager using c-sigusr-sleep image", func() {
 	BeforeEach(func() {
 		var err error
 		id := strconv.Itoa(GinkgoParallelNode())
-		worker, err = NewWorker(id, client, "c-sigusr-sleep", image)
+		worker, err = NewWorker(id, client, image)
 		Expect(err).NotTo(HaveOccurred())
 	})
 

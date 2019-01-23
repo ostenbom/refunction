@@ -9,6 +9,8 @@
 #include <errno.h>
 #include <string.h>
 #include <signal.h>
+#include <time.h>
+
 
 volatile sig_atomic_t usr_interrupt = 0;
 
@@ -43,13 +45,17 @@ int main() {
   FILE *fp;
   fp = fopen("count.txt", "w+");
 
+  struct timespec wait;
+  wait.tv_sec = 0;
+  wait.tv_nsec = 10000L;
+
   int count = 0;
   while(1) {
     printf("at: %i\n", count);
     fprintf(fp, "at: %i\n", count);
     fflush(fp);
     count++;
-    sleep(1);
+    nanosleep(&wait, NULL);
   }
 
   fclose(fp);

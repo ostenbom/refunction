@@ -15,7 +15,7 @@ import (
 	"github.com/containerd/containerd/oci"
 )
 
-func NewWorker(id string, client *containerd.Client, childID string, image string) (*Worker, error) {
+func NewWorker(id string, client *containerd.Client, targetSnapshot string) (*Worker, error) {
 	ctx := namespaces.WithNamespace(context.Background(), "refunction-worker"+id)
 
 	snapManager, err := NewSnapshotManager(ctx, client)
@@ -25,8 +25,7 @@ func NewWorker(id string, client *containerd.Client, childID string, image strin
 
 	return &Worker{
 		ID:             id,
-		childID:        childID,
-		targetSnapshot: image,
+		targetSnapshot: targetSnapshot,
 		client:         client,
 		ctx:            ctx,
 		snapManager:    snapManager,
@@ -35,7 +34,6 @@ func NewWorker(id string, client *containerd.Client, childID string, image strin
 
 type Worker struct {
 	ID             string
-	childID        string
 	targetSnapshot string
 	client         *containerd.Client
 	ctx            context.Context
@@ -53,7 +51,7 @@ func (m *Worker) StartChild() error {
 		return err
 	}
 
-	containerID := m.childID + "-" + m.ID
+	containerID := m.targetSnapshot + "-" + m.ID
 	_, err = m.snapManager.GetRwMounts(m.targetSnapshot, containerID)
 	if err != nil {
 		return err
@@ -123,6 +121,7 @@ func (m *Worker) Detach() error {
 	}
 
 	m.attached = false
+	m.stopped = false
 	runtime.UnlockOSThread()
 	return nil
 }
@@ -161,7 +160,6 @@ func (m *Worker) SendEnableSignal() error {
 
 	var waitStat syscall.WaitStatus
 	_, err = syscall.Wait4(int(pid), &waitStat, 0, nil)
-
 	if err != nil {
 		return err
 	}
@@ -176,7 +174,7 @@ func (m *Worker) GetState() (*State, error) {
 	if !m.stopped {
 		err := m.Stop()
 		if err != nil {
-			return nil, fmt.Errorf("could not stop child for regs print: %s", err)
+			return nil, fmt.Errorf("could not stop child to get state: %s", err)
 		}
 		defer m.Continue()
 	}

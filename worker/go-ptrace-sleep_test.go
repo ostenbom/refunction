@@ -19,7 +19,7 @@ var _ = Describe("Worker Manager using go-ptrace-sleep image", func() {
 	BeforeEach(func() {
 		var err error
 		id := strconv.Itoa(GinkgoParallelNode())
-		manager, err = NewWorker(id, client, "go-ptrace-sleep", image)
+		manager, err = NewWorker(id, client, image)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
