@@ -12,14 +12,14 @@ import (
 	. "github.com/ostenbom/refunction/worker"
 )
 
-var _ = Describe("Worker Manager using sigusr-sleep image", func() {
+var _ = Describe("Worker Manager using c-sigusr-sleep image", func() {
 	var worker *Worker
-	image := "docker.io/ostenbom/sigusr-sleep:latest"
+	image := "c-sigusr-sleep"
 
 	BeforeEach(func() {
 		var err error
 		id := strconv.Itoa(GinkgoParallelNode())
-		worker, err = NewWorker(id, client, "sigusr-sleep", image)
+		worker, err = NewWorker(id, client, "c-sigusr-sleep", image)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -28,7 +28,7 @@ var _ = Describe("Worker Manager using sigusr-sleep image", func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	Describe("StartChild - sigusr-sleep", func() {
+	Describe("StartChild - c-sigusr-sleep", func() {
 		BeforeEach(func() {
 			Expect(worker.StartChild()).To(Succeed())
 		})
@@ -40,7 +40,7 @@ var _ = Describe("Worker Manager using sigusr-sleep image", func() {
 		})
 
 		It("does not create the count file on start", func() {
-			countLocation := getRootfs(worker, "sigusr-sleep") + "count.txt"
+			countLocation := getRootfs(worker, "c-sigusr-sleep") + "count.txt"
 
 			if _, err := os.Stat(countLocation); !os.IsNotExist(err) {
 				Fail("count file exists without SIGUSR1")
@@ -52,7 +52,7 @@ var _ = Describe("Worker Manager using sigusr-sleep image", func() {
 			err := worker.SendEnableSignal()
 			Expect(err).NotTo(HaveOccurred())
 
-			countLocation := getRootfs(worker, "sigusr-sleep") + "count.txt"
+			countLocation := getRootfs(worker, "c-sigusr-sleep") + "count.txt"
 
 			Eventually(func() bool {
 				_, err := os.Stat(countLocation)
@@ -92,7 +92,7 @@ var _ = Describe("Worker Manager using sigusr-sleep image", func() {
 			err := worker.SendEnableSignal()
 			Expect(err).NotTo(HaveOccurred())
 
-			countLocation := getRootfs(worker, "sigusr-sleep") + "count.txt"
+			countLocation := getRootfs(worker, "c-sigusr-sleep") + "count.txt"
 
 			Eventually(func() bool {
 				_, err = os.Stat(countLocation)

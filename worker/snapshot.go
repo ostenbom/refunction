@@ -15,7 +15,7 @@ import (
 	"github.com/containerd/containerd/snapshots"
 )
 
-func NewSnapshotManager(client *containerd.Client, ctx context.Context) (*SnapshotManager, error) {
+func NewSnapshotManager(ctx context.Context, client *containerd.Client) (*SnapshotManager, error) {
 	workDir, err := os.Getwd()
 	if err != nil {
 		return nil, fmt.Errorf("could not get working directory: %s", err)

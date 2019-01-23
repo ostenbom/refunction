@@ -18,40 +18,52 @@ import (
 func NewWorker(id string, client *containerd.Client, childID string, image string) (*Worker, error) {
 	ctx := namespaces.WithNamespace(context.Background(), "refunction-worker"+id)
 
+	snapManager, err := NewSnapshotManager(ctx, client)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Worker{
-		ID:      id,
-		childID: childID,
-		image:   image,
-		client:  client,
-		ctx:     ctx,
+		ID:             id,
+		childID:        childID,
+		targetSnapshot: image,
+		client:         client,
+		ctx:            ctx,
+		snapManager:    snapManager,
 	}, nil
 }
 
 type Worker struct {
-	ID           string
-	childID      string
-	image        string
-	client       *containerd.Client
-	ctx          context.Context
-	container    containerd.Container
-	task         containerd.Task
-	taskExitChan <-chan containerd.ExitStatus
-	attached     bool
-	stopped      bool
+	ID             string
+	childID        string
+	targetSnapshot string
+	client         *containerd.Client
+	ctx            context.Context
+	snapManager    *SnapshotManager
+	container      containerd.Container
+	task           containerd.Task
+	taskExitChan   <-chan containerd.ExitStatus
+	attached       bool
+	stopped        bool
 }
 
 func (m *Worker) StartChild() error {
-	image, err := m.client.Pull(m.ctx, m.image, containerd.WithPullUnpack)
+	err := m.snapManager.CreateLayerFromBase(m.targetSnapshot)
 	if err != nil {
 		return err
 	}
 
 	containerID := m.childID + "-" + m.ID
+	_, err = m.snapManager.GetRwMounts(m.targetSnapshot, containerID)
+	if err != nil {
+		return err
+	}
+
 	container, err := m.client.NewContainer(
 		m.ctx,
 		containerID,
-		containerd.WithNewSnapshot(containerID, image),
-		containerd.WithNewSpec(oci.WithImageConfig(image)),
+		containerd.WithSnapshot(containerID),
+		containerd.WithNewSpec(oci.WithProcessArgs(m.targetSnapshot)),
 	)
 	if err != nil {
 		return err

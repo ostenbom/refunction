@@ -37,7 +37,7 @@ var _ = Describe("Snapshot manager", func() {
 			entriesBefore, err := getSnapshotEntries()
 			Expect(err).NotTo(HaveOccurred())
 
-			_, err = NewSnapshotManager(client, ctx)
+			_, err = NewSnapshotManager(ctx, client)
 			Expect(err).NotTo(HaveOccurred())
 
 			info, err := snapshotter.Stat(ctx, baseName)
@@ -63,7 +63,7 @@ var _ = Describe("Snapshot manager", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(info.Name).To(Equal(baseName))
 
-			_, err = NewSnapshotManager(client, ctx)
+			_, err = NewSnapshotManager(ctx, client)
 			Expect(err).NotTo(HaveOccurred())
 
 			// then nothing new was made
@@ -79,7 +79,7 @@ var _ = Describe("Snapshot manager", func() {
 		var startEntries []os.FileInfo
 		BeforeEach(func() {
 			var err error
-			manager, err = NewSnapshotManager(client, ctx)
+			manager, err = NewSnapshotManager(ctx, client)
 			Expect(err).NotTo(HaveOccurred())
 
 			startEntries, err = getSnapshotEntries()
