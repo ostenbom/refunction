@@ -35,11 +35,11 @@ var _ = Describe("Worker Manager using go-ptrace-sleep image", func() {
 
 	Describe("StartChild - go-ptrace-sleep", func() {
 		BeforeEach(func() {
-			Expect(manager.StartChild()).To(Succeed())
+			Expect(manager.Start()).To(Succeed())
 		})
 
 		It("creates a child with a pid", func() {
-			pid, err := manager.ChildPid()
+			pid, err := manager.Pid()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(pid >= 0)
 		})
@@ -68,7 +68,7 @@ var _ = Describe("Worker Manager using go-ptrace-sleep image", func() {
 
 	Describe("Ptracing", func() {
 		BeforeEach(func() {
-			Expect(manager.StartChild()).To(Succeed())
+			Expect(manager.Start()).To(Succeed())
 		})
 
 		It("can attach and detach", func() {
@@ -79,7 +79,7 @@ var _ = Describe("Worker Manager using go-ptrace-sleep image", func() {
 		It("is in a stopped state after attaching", func() {
 			Expect(manager.Attach()).To(Succeed())
 
-			pid, err := manager.ChildPid()
+			pid, err := manager.Pid()
 			Expect(err).NotTo(HaveOccurred())
 
 			processState := getPidState(pid)

@@ -21,6 +21,7 @@ type Memory struct {
 }
 
 type State struct {
+	pid             int
 	registers       syscall.PtraceRegs
 	memoryLocations []*Memory
 }
@@ -46,7 +47,7 @@ func NewMemoryLocations(pid int) ([]*Memory, error) {
 			name = ""
 		}
 
-		// These are kernel owned and can be skipped
+		// TODO: These are kernel owned and can be skipped?
 		if name == "[vvar]" || name == "[vdso]" || name == "[vsyscall]" {
 			continue
 		}
@@ -64,6 +65,60 @@ func NewMemoryLocations(pid int) ([]*Memory, error) {
 	}
 
 	return memoryLocations, nil
+}
+
+func (s *State) CountDirtyPages(memoryName string) (int, error) {
+	var memory *Memory
+	for _, m := range s.memoryLocations {
+		if m.name == memoryName {
+			memory = m
+			break
+		}
+	}
+	if memory == nil {
+		return 0, fmt.Errorf("no memory %s found", memoryName)
+	}
+
+	pagemap, err := os.OpenFile(fmt.Sprintf("/proc/%d/pagemap", s.pid), os.O_RDONLY, os.ModePerm)
+	if err != nil {
+		return 0, fmt.Errorf("could not open pid %d pagemap: %s", s.pid, err)
+	}
+	defer pagemap.Close()
+
+	// 64-bit entries
+	pagemapEntrySize := int64(8)
+	pageSize := int64(os.Getpagesize())
+
+	startPage := memory.startOffset / pageSize
+	endPage := memory.endOffset / pageSize
+	numPages := endPage - startPage
+	pagemapStartOffset := startPage * pagemapEntrySize
+
+	_, err = pagemap.Seek(pagemapStartOffset, 0)
+	if err != nil {
+		return 0, fmt.Errorf("could not seek pid %d pagemap: %s", s.pid, err)
+	}
+
+	var dirty int
+	var thisPage int64 = memory.startOffset
+	entryBytes := make([]byte, pagemapEntrySize)
+	for i := int64(0); i < numPages; i++ {
+
+		read, err := pagemap.Read(entryBytes)
+		if err != nil || int64(read) != pagemapEntrySize {
+			return 0, fmt.Errorf("could not read pid %d pagemap: %s", s.pid, err)
+		}
+
+		// 55th bit is soft/dirty bit. Arch is little-endian
+		dirtySet := entryBytes[6] >> 7
+		if dirtySet == byte(1) {
+			dirty++
+		}
+
+		thisPage += pageSize
+	}
+
+	return dirty, nil
 }
 
 func parseMemoryData(name string, memoryData []string) (*Memory, error) {

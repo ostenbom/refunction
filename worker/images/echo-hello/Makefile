@@ -1,5 +1,5 @@
 default:
-	gcc echo-hello.c -o echo-hello
+	gcc -static -static-libgcc -static-libstdc++ echo-hello.c -o echo-hello
 
 clean:
 	rm -rf echo-hello

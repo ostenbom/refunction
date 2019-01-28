@@ -30,11 +30,11 @@ var _ = Describe("Worker Manager using c-sigusr-sleep image", func() {
 
 	Describe("StartChild - c-sigusr-sleep", func() {
 		BeforeEach(func() {
-			Expect(worker.StartChild()).To(Succeed())
+			Expect(worker.Start()).To(Succeed())
 		})
 
 		It("creates a child with a pid", func() {
-			pid, err := worker.ChildPid()
+			pid, err := worker.Pid()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(pid >= 0)
 		})
@@ -63,7 +63,7 @@ var _ = Describe("Worker Manager using c-sigusr-sleep image", func() {
 
 	Describe("Ptracing", func() {
 		BeforeEach(func() {
-			Expect(worker.StartChild()).To(Succeed())
+			Expect(worker.Start()).To(Succeed())
 		})
 
 		It("can attach and detach", func() {
@@ -74,7 +74,7 @@ var _ = Describe("Worker Manager using c-sigusr-sleep image", func() {
 		It("is in a stopped state after attaching", func() {
 			Expect(worker.Attach()).To(Succeed())
 
-			pid, err := worker.ChildPid()
+			pid, err := worker.Pid()
 			Expect(err).NotTo(HaveOccurred())
 
 			processState := getPidState(pid)

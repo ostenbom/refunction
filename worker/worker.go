@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"runtime"
 	"syscall"
 
@@ -45,7 +46,7 @@ type Worker struct {
 	stopped        bool
 }
 
-func (m *Worker) StartChild() error {
+func (m *Worker) Start() error {
 	err := m.snapManager.CreateLayerFromBase(m.targetSnapshot)
 	if err != nil {
 		return err
@@ -143,7 +144,7 @@ func (m *Worker) Continue() error {
 }
 
 func (m *Worker) SendEnableSignal() error {
-	pid, err := m.ChildPid()
+	pid, err := m.Pid()
 	if err != nil {
 		return err
 	}
@@ -180,18 +181,35 @@ func (m *Worker) GetState() (*State, error) {
 	}
 
 	var state State
-	err := syscall.PtraceGetRegs(int(m.task.Pid()), &state.registers)
+	pid := int(m.task.Pid())
+	err := syscall.PtraceGetRegs(pid, &state.registers)
 	if err != nil {
 		return nil, fmt.Errorf("could not get regs: %s", err)
 	}
 
-	memoryLocations, err := NewMemoryLocations(int(m.task.Pid()))
+	memoryLocations, err := NewMemoryLocations(pid)
 	if err != nil {
 		return nil, fmt.Errorf("could not get memory locations: %s", err)
 	}
 	state.memoryLocations = memoryLocations
+	state.pid = pid
 
 	return &state, nil
+}
+
+func (m *Worker) ClearMemRefs() error {
+	pid := int(m.task.Pid())
+	f, err := os.OpenFile(fmt.Sprintf("/proc/%d/clear_refs", pid), os.O_WRONLY, 0)
+	if err != nil {
+		return fmt.Errorf("could not open clear_refs for pid %d: %s", pid, err)
+	}
+	defer f.Close()
+
+	_, err = f.WriteString("4")
+	if err != nil {
+		return fmt.Errorf("could not clear_refs for pid %d: %s", pid, err)
+	}
+	return nil
 }
 
 func (m *Worker) GetImage(name string) (containerd.Image, error) {
@@ -202,7 +220,7 @@ func (m *Worker) ListImages() ([]containerd.Image, error) {
 	return m.client.ListImages(m.ctx)
 }
 
-func (m *Worker) ChildPid() (uint32, error) {
+func (m *Worker) Pid() (uint32, error) {
 	if m.task == nil {
 		return 0, errors.New("child not initialized")
 	}
