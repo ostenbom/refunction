@@ -29,6 +29,7 @@ func NewWorker(id string, client *containerd.Client, targetSnapshot string) (*Wo
 		targetSnapshot: targetSnapshot,
 		client:         client,
 		ctx:            ctx,
+		creator:        cio.NullIO,
 		snapManager:    snapManager,
 	}, nil
 }
@@ -38,12 +39,17 @@ type Worker struct {
 	targetSnapshot string
 	client         *containerd.Client
 	ctx            context.Context
+	creator        cio.Creator
 	snapManager    *SnapshotManager
 	container      containerd.Container
 	task           containerd.Task
 	taskExitChan   <-chan containerd.ExitStatus
 	attached       bool
 	stopped        bool
+}
+
+func (m *Worker) WithCreator(creator cio.Creator) {
+	m.creator = creator
 }
 
 func (m *Worker) Start() error {
@@ -70,7 +76,7 @@ func (m *Worker) Start() error {
 
 	m.container = container
 
-	task, err := container.NewTask(m.ctx, cio.NullIO)
+	task, err := container.NewTask(m.ctx, m.creator)
 	if err != nil {
 		return err
 	}

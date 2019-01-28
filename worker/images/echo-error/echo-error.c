@@ -2,6 +2,6 @@
 #include <unistd.h>
 
 int main() {
-  printf("hello!\n");
+  fprintf(stderr, "error!\n");
   sleep(10);
 }

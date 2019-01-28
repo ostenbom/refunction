@@ -17,13 +17,13 @@ var _ = Describe("Worker Manager checkpointing", func() {
 		id = strconv.Itoa(GinkgoParallelNode())
 	})
 
-	Describe("for loop", func() {
+	Describe("for loop stack + heap", func() {
 		var worker *Worker
 		var targetLayer string
 
 		BeforeEach(func() {
 			var err error
-			targetLayer = "forloop"
+			targetLayer = "forloopheap"
 			worker, err = NewWorker(id, client, targetLayer)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -70,6 +70,26 @@ var _ = Describe("Worker Manager checkpointing", func() {
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(dirtyHeap).NotTo(Equal(0))
+		})
+
+	})
+
+	Describe("for loop stack", func() {
+		var worker *Worker
+		var targetLayer string
+
+		BeforeEach(func() {
+			var err error
+			targetLayer = "forloopstack"
+			worker, err = NewWorker(id, client, targetLayer)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(worker.Start()).To(Succeed())
+		})
+
+		AfterEach(func() {
+			err := worker.End()
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("can notice a variable change the stack", func() {
