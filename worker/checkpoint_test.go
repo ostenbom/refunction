@@ -44,13 +44,16 @@ var _ = Describe("Worker Manager checkpointing", func() {
 
 			// while still stopped, we expect there to be no dirty pages
 			dirtyStack, err := state.CountDirtyPages("[stack]")
+			dirtyHeap, err2 := state.CountDirtyPages("[heap]")
 			Expect(worker.Detach()).To(Succeed())
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(dirtyStack).To(Equal(0))
+			Expect(err2).NotTo(HaveOccurred())
+			Expect(dirtyHeap).To(Equal(0))
 		})
 
-		It("knows when memory has changed", func() {
+		It("knows when the heap has been modified", func() {
 			Expect(worker.Attach()).To(Succeed())
 			Expect(worker.ClearMemRefs()).To(Succeed())
 			Expect(worker.Continue()).To(Succeed())
@@ -69,6 +72,22 @@ var _ = Describe("Worker Manager checkpointing", func() {
 			Expect(dirtyHeap).NotTo(Equal(0))
 		})
 
+		It("can notice a variable change the stack", func() {
+			Expect(worker.Attach()).To(Succeed())
+			Expect(worker.ClearMemRefs()).To(Succeed())
+			Expect(worker.Continue()).To(Succeed())
+
+			// loop ticks every 50ms
+			time.Sleep(time.Millisecond * 60)
+			state, err := worker.GetState()
+			Expect(err).NotTo(HaveOccurred())
+
+			dirtyStack, err := state.CountDirtyPages("[stack]")
+			Expect(worker.Detach()).To(Succeed())
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(dirtyStack).NotTo(Equal(0))
+		})
 	})
 
 })
