@@ -6,12 +6,12 @@
 int main() {
   printf("starting\n");
 
-  FILE *fp;
+  FILE *fp = malloc(sizeof(FILE));
   fp = fopen("count.txt", "w+");
 
-  struct timespec wait;
-  wait.tv_sec = 0;
-  wait.tv_nsec = 500000000L;
+  struct timespec *wait = malloc(sizeof(struct timespec));
+  wait->tv_sec = 0;
+  wait->tv_nsec = 50000000L; // 50ms
 
   int count = 0;
   while(1) {
@@ -19,7 +19,7 @@ int main() {
     fprintf(fp, "at: %i\n", count);
     fflush(fp);
     count++;
-    nanosleep(&wait, NULL);
+    nanosleep(wait, NULL);
   }
 
   fclose(fp);

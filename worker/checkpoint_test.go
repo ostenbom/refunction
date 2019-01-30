@@ -108,6 +108,22 @@ var _ = Describe("Worker Manager checkpointing", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(dirtyStack).NotTo(Equal(0))
 		})
+
+		It("can make a copy of an area of memory", func() {
+			// loop ticks every 50ms
+			time.Sleep(time.Millisecond * 60)
+			Expect(worker.Attach()).To(Succeed())
+			defer worker.Detach()
+
+			state, err := worker.GetState()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(state.SavePages("[stack]")).To(Succeed())
+
+			memSize, err := state.MemorySize("[stack]")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(memSize).NotTo(Equal(0))
+		})
 	})
 
 })

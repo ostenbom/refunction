@@ -1,5 +1,8 @@
 package worker
 
+// #cgo CFLAGS: -g -Wall
+// #include <string.h>
+import "C"
 import (
 	"bufio"
 	"fmt"
@@ -18,6 +21,7 @@ type Memory struct {
 	majorDevice   int
 	minorDevice   int
 	iNode         int
+	content       []byte
 }
 
 type State struct {
@@ -67,7 +71,7 @@ func NewMemoryLocations(pid int) ([]*Memory, error) {
 	return memoryLocations, nil
 }
 
-func (s *State) CountDirtyPages(memoryName string) (int, error) {
+func (s *State) getMemory(memoryName string) (*Memory, error) {
 	var memory *Memory
 	for _, m := range s.memoryLocations {
 		if m.name == memoryName {
@@ -76,7 +80,110 @@ func (s *State) CountDirtyPages(memoryName string) (int, error) {
 		}
 	}
 	if memory == nil {
-		return 0, fmt.Errorf("no memory %s found", memoryName)
+		return nil, fmt.Errorf("no memory %s found", memoryName)
+	}
+
+	return memory, nil
+}
+
+func (s *State) SavePages(memoryName string) error {
+	memory, err := s.getMemory(memoryName)
+	if err != nil {
+		return err
+	}
+
+	numBytes := memory.endOffset - memory.startOffset
+	memory.content = make([]byte, numBytes)
+
+	memoryFile, err := os.OpenFile(fmt.Sprintf("/proc/%d/mem", s.pid), os.O_RDONLY, 0)
+	if err != nil {
+		return fmt.Errorf("could not open /proc/pid/mem: %s", err)
+	}
+	defer memoryFile.Close()
+
+	read, err := memoryFile.ReadAt(memory.content, memory.startOffset)
+	if err != nil || int64(read) != numBytes {
+		return fmt.Errorf("could not read /proc/pid/mem data: %s", err)
+	}
+
+	return nil
+}
+
+func (s *State) MemorySize(memoryName string) (int, error) {
+	memory, err := s.getMemory(memoryName)
+	if err != nil {
+		return 0, err
+	}
+
+	return len(memory.content), nil
+}
+
+func (s *State) RestoreDirtyPages(memoryName string) error {
+	memory, err := s.getMemory(memoryName)
+	if err != nil {
+		return err
+	}
+
+	pagemap, err := os.OpenFile(fmt.Sprintf("/proc/%d/pagemap", s.pid), os.O_RDONLY, os.ModePerm)
+	if err != nil {
+		return fmt.Errorf("could not open pid %d pagemap: %s", s.pid, err)
+	}
+	defer pagemap.Close()
+
+	memoryFile, err := os.OpenFile(fmt.Sprintf("/proc/%d/mem", s.pid), os.O_RDWR, 0)
+	if err != nil {
+		return fmt.Errorf("could not open /proc/pid/mem: %s", err)
+	}
+	defer memoryFile.Close()
+
+	// 64-bit entries
+	pagemapEntrySize := 8
+	pageSize := int64(os.Getpagesize())
+
+	startPage := memory.startOffset / pageSize
+	endPage := memory.endOffset / pageSize
+	numPages := endPage - startPage
+	pagemapStartOffset := startPage * int64(pagemapEntrySize)
+
+	_, err = pagemap.Seek(pagemapStartOffset, 0)
+	if err != nil {
+		return fmt.Errorf("could not seek pid %d pagemap: %s", s.pid, err)
+	}
+
+	var dirty int
+	var currentPageOffset = memory.startOffset
+	var currentByteNum = 0
+	entryBytes := make([]byte, pagemapEntrySize)
+	for i := int64(0); i < numPages; i++ {
+
+		read, err := pagemap.Read(entryBytes)
+		if err != nil || read != pagemapEntrySize {
+			return fmt.Errorf("could not read pid %d pagemap: %s", s.pid, err)
+		}
+
+		// 55th bit is soft/dirty bit. Arch is little-endian
+		dirtySet := entryBytes[6] >> 7
+		if dirtySet == byte(1) {
+			dirty++
+			thisPage := memory.content[currentByteNum : currentByteNum+int(pageSize)]
+			read, err = memoryFile.WriteAt(thisPage, currentPageOffset)
+			if err != nil || int64(read) != pageSize {
+				return fmt.Errorf("could not read pid /proc/%d/map: %s", s.pid, err)
+			}
+			// spew.Dump(thisPage)
+		}
+
+		currentPageOffset += pageSize
+		currentByteNum += int(pageSize)
+	}
+
+	return nil
+}
+
+func (s *State) CountDirtyPages(memoryName string) (int, error) {
+	memory, err := s.getMemory(memoryName)
+	if err != nil {
+		return 0, err
 	}
 
 	pagemap, err := os.OpenFile(fmt.Sprintf("/proc/%d/pagemap", s.pid), os.O_RDONLY, os.ModePerm)
@@ -86,13 +193,13 @@ func (s *State) CountDirtyPages(memoryName string) (int, error) {
 	defer pagemap.Close()
 
 	// 64-bit entries
-	pagemapEntrySize := int64(8)
+	pagemapEntrySize := 8
 	pageSize := int64(os.Getpagesize())
 
 	startPage := memory.startOffset / pageSize
 	endPage := memory.endOffset / pageSize
 	numPages := endPage - startPage
-	pagemapStartOffset := startPage * pagemapEntrySize
+	pagemapStartOffset := startPage * int64(pagemapEntrySize)
 
 	_, err = pagemap.Seek(pagemapStartOffset, 0)
 	if err != nil {
@@ -100,12 +207,12 @@ func (s *State) CountDirtyPages(memoryName string) (int, error) {
 	}
 
 	var dirty int
-	var thisPage int64 = memory.startOffset
+	var currentPageOffset = memory.startOffset
 	entryBytes := make([]byte, pagemapEntrySize)
 	for i := int64(0); i < numPages; i++ {
 
 		read, err := pagemap.Read(entryBytes)
-		if err != nil || int64(read) != pagemapEntrySize {
+		if err != nil || read != pagemapEntrySize {
 			return 0, fmt.Errorf("could not read pid %d pagemap: %s", s.pid, err)
 		}
 
@@ -115,7 +222,7 @@ func (s *State) CountDirtyPages(memoryName string) (int, error) {
 			dirty++
 		}
 
-		thisPage += pageSize
+		currentPageOffset += pageSize
 	}
 
 	return dirty, nil
