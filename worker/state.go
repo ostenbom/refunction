@@ -1,8 +1,5 @@
 package worker
 
-// #cgo CFLAGS: -g -Wall
-// #include <string.h>
-import "C"
 import (
 	"bufio"
 	"fmt"

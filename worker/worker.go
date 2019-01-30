@@ -203,6 +203,24 @@ func (m *Worker) GetState() (*State, error) {
 	return &state, nil
 }
 
+func (m *Worker) SetRegs(state *State) error {
+	if !m.stopped {
+		err := m.Stop()
+		if err != nil {
+			return fmt.Errorf("could not stop child to set regs: %s", err)
+		}
+		defer m.Continue()
+	}
+
+	pid := int(m.task.Pid())
+	err := syscall.PtraceSetRegs(pid, &state.registers)
+	if err != nil {
+		return fmt.Errorf("could not set regs: %s", err)
+	}
+
+	return nil
+}
+
 func (m *Worker) ClearMemRefs() error {
 	pid := int(m.task.Pid())
 	f, err := os.OpenFile(fmt.Sprintf("/proc/%d/clear_refs", pid), os.O_WRONLY, 0)
