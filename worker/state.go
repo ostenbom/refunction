@@ -115,6 +115,47 @@ func (s *State) MemorySize(memoryName string) (int, error) {
 	return len(memory.content), nil
 }
 
+func (s *State) MemoryChanged() (bool, error) {
+	newMemory, err := NewMemoryLocations(s.pid)
+	if err != nil {
+		return true, fmt.Errorf("could not get new memory on memory changed check: %s", err)
+	}
+	if len(s.memoryLocations) != len(newMemory) {
+		return true, nil
+	}
+
+	for i := range newMemory {
+		newMem := newMemory[i]
+		oldMem := s.memoryLocations[i]
+		if newMem.name != oldMem.name {
+			return true, nil
+		}
+		if newMem.startOffset != oldMem.startOffset {
+			return true, nil
+		}
+		if newMem.endOffset != oldMem.endOffset {
+			return true, nil
+		}
+		if newMem.processOffset != oldMem.processOffset {
+			return true, nil
+		}
+		if newMem.permissions != oldMem.permissions {
+			return true, nil
+		}
+		if newMem.majorDevice != oldMem.majorDevice {
+			return true, nil
+		}
+		if newMem.minorDevice != oldMem.minorDevice {
+			return true, nil
+		}
+		if newMem.iNode != oldMem.iNode {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
 func (s *State) RestoreDirtyPages(memoryName string) error {
 	memory, err := s.getMemory(memoryName)
 	if err != nil {
