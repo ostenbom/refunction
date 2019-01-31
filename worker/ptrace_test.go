@@ -15,12 +15,13 @@ import (
 
 var _ = Describe("Worker Manager using c-sigusr-sleep image", func() {
 	var worker *Worker
+	runtime := "alpine"
 	image := "c-sigusr-sleep"
 
 	BeforeEach(func() {
 		var err error
 		id := strconv.Itoa(GinkgoParallelNode())
-		worker, err = NewWorker(id, client, image)
+		worker, err = NewWorker(id, client, runtime, image)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -108,12 +109,13 @@ var _ = Describe("Worker Manager using c-sigusr-sleep image", func() {
 
 var _ = Describe("Worker Manager using go-ptrace-sleep image", func() {
 	var manager *Worker
+	runtime := "alpine"
 	image := "go-ptrace-sleep"
 
 	BeforeEach(func() {
 		var err error
 		id := strconv.Itoa(GinkgoParallelNode())
-		manager, err = NewWorker(id, client, image)
+		manager, err = NewWorker(id, client, runtime, image)
 		Expect(err).NotTo(HaveOccurred())
 	})
 

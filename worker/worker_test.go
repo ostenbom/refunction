@@ -23,12 +23,13 @@ var _ = Describe("Worker", func() {
 		var targetLayer string
 		var stdout *gbytes.Buffer
 		var stderr *gbytes.Buffer
+		runtime := "alpine"
 
 		Context("when writing to stdout", func() {
 			BeforeEach(func() {
 				var err error
 				targetLayer = "echo-hello"
-				worker, err = NewWorker(id, client, targetLayer)
+				worker, err = NewWorker(id, client, runtime, targetLayer)
 				Expect(err).NotTo(HaveOccurred())
 				stdout = gbytes.NewBuffer()
 				stderr = gbytes.NewBuffer()
@@ -46,7 +47,7 @@ var _ = Describe("Worker", func() {
 			BeforeEach(func() {
 				var err error
 				targetLayer = "echo-error"
-				worker, err = NewWorker(id, client, targetLayer)
+				worker, err = NewWorker(id, client, runtime, targetLayer)
 				Expect(err).NotTo(HaveOccurred())
 				stdout = gbytes.NewBuffer()
 				stderr = gbytes.NewBuffer()

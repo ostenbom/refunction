@@ -3,6 +3,7 @@ package worker
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -15,7 +16,7 @@ import (
 	"github.com/containerd/containerd/snapshots"
 )
 
-func NewSnapshotManager(ctx context.Context, client *containerd.Client) (*SnapshotManager, error) {
+func NewSnapshotManager(ctx context.Context, client *containerd.Client, runtime string) (*SnapshotManager, error) {
 	workDir, err := os.Getwd()
 	if err != nil {
 		return nil, fmt.Errorf("could not get working directory: %s", err)
@@ -26,35 +27,76 @@ func NewSnapshotManager(ctx context.Context, client *containerd.Client) (*Snapsh
 	})
 
 	manager := SnapshotManager{
-		baseName:    "alpine",
+		runtime:     runtime,
 		ctx:         ctx,
-		layersPath:  fmt.Sprintf("%s/layers", workDir),
+		layersPath:  fmt.Sprintf("%s/activelayers", workDir),
 		snapshotter: client.SnapshotService("overlayfs"),
 		noGc:        opt,
 	}
 
-	err = manager.EnsureBaseLayer()
+	err = manager.ensureRuntimeBase(workDir)
 	if err != nil {
-		return nil, fmt.Errorf("could not create base layer: %s", err)
+		return nil, fmt.Errorf("could not create runtime base: %s", err)
 	}
 
 	return &manager, nil
 }
 
 type SnapshotManager struct {
-	baseName    string
+	runtime     string
 	ctx         context.Context
 	layersPath  string
 	snapshotter snapshots.Snapshotter
 	noGc        snapshots.Opt
 }
 
-func (m *SnapshotManager) EnsureBaseLayer() error {
-	return m.createLayer(m.baseName, "")
+type manifest struct {
+	Layers []string
+}
+
+func (m *SnapshotManager) ensureRuntimeBase(workDir string) error {
+	runtimeManifestBytes, err := ioutil.ReadFile(fmt.Sprintf("%s/runtimes/%s/manifest.json", workDir, m.runtime))
+	if err != nil {
+		return fmt.Errorf("could not open runtime dir: %s", err)
+	}
+
+	var runmen []manifest
+	err = json.Unmarshal(runtimeManifestBytes, &runmen)
+	if err != nil {
+		return fmt.Errorf("could not parse layers from manifest: %s", err)
+	}
+	if len(runmen) == 0 {
+		return fmt.Errorf("no images in runtime manifest")
+	}
+	runman := runmen[0]
+
+	// Sanity check
+	if len(runman.Layers) == 0 {
+		return fmt.Errorf("no layers in runtime manifest")
+	}
+
+	prevLayer := ""
+	for i := 0; i < len(runman.Layers); i++ {
+		currentLayer := runman.Layers[i]
+		layerPath := fmt.Sprintf("%s/runtimes/%s/%s", workDir, m.runtime, currentLayer)
+
+		layerName := currentLayer
+		if i == len(runman.Layers)-1 {
+			layerName = m.runtime
+		}
+		err := m.createLayer(layerName, layerPath, prevLayer)
+		if err != nil {
+			return fmt.Errorf("could not create runtime layer: %s", err)
+		}
+		prevLayer = currentLayer
+	}
+
+	return nil
 }
 
 func (m *SnapshotManager) CreateLayerFromBase(layerName string) error {
-	return m.createLayer(layerName, m.baseName)
+	layerPath := fmt.Sprintf("%s/%s/layer.tar", m.layersPath, layerName)
+	return m.createLayer(layerName, layerPath, m.runtime)
 }
 
 func (m *SnapshotManager) GetRwMounts(layerName, containerName string) ([]mount.Mount, error) {
@@ -66,13 +108,12 @@ func (m *SnapshotManager) GetRwMounts(layerName, containerName string) ([]mount.
 	return mounts, nil
 }
 
-func (m *SnapshotManager) createLayer(layerName, parentName string) error {
+func (m *SnapshotManager) createLayer(layerName, layerPath, parentName string) error {
 	_, err := m.snapshotter.Stat(m.ctx, layerName)
 	if err == nil {
 		return nil
 	}
 
-	layerPath := fmt.Sprintf("%s/%s/layer.tar", m.layersPath, layerName)
 	tmpDir, err := ioutil.TempDir("", "snapshotmanager")
 	if err != nil {
 		return err

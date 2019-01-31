@@ -20,10 +20,11 @@ var _ = Describe("Worker Manager checkpointing", func() {
 	Describe("memory checkpointing", func() {
 		var worker *Worker
 		var targetLayer string
+		runtime := "alpine"
 
 		JustBeforeEach(func() {
 			var err error
-			worker, err = NewWorker(id, client, targetLayer)
+			worker, err = NewWorker(id, client, runtime, targetLayer)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(worker.Start()).To(Succeed())

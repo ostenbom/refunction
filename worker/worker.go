@@ -17,10 +17,10 @@ import (
 	. "github.com/ostenbom/refunction/worker/state"
 )
 
-func NewWorker(id string, client *containerd.Client, targetSnapshot string) (*Worker, error) {
+func NewWorker(id string, client *containerd.Client, runtime, targetSnapshot string) (*Worker, error) {
 	ctx := namespaces.WithNamespace(context.Background(), "refunction-worker"+id)
 
-	snapManager, err := NewSnapshotManager(ctx, client)
+	snapManager, err := NewSnapshotManager(ctx, client, runtime)
 	if err != nil {
 		return nil, err
 	}
