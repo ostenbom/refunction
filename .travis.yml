@@ -24,4 +24,4 @@ install:
   - go get github.com/onsi/gomega/...
   - export PATH=$PATH:$HOME/gopath/bin
 
-script: ginkgo -r --randomizeAllSpecs --randomizeSuites
+script: sudo env "PATH=$PATH" ginkgo -r --randomizeAllSpecs --randomizeSuites

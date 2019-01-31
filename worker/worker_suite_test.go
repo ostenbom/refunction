@@ -67,7 +67,6 @@ func NewServer(runDir string, config containerdrunner.Config) *gexec.Session {
 
 	cmd := exec.Command("containerd", "--config", configFile.Name())
 	session, err := gexec.Start(cmd, GinkgoWriter, GinkgoWriter)
-	err = cmd.Start()
 	Expect(err).NotTo(HaveOccurred())
 	return session
 }
