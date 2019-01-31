@@ -1,4 +1,6 @@
-# refunction
+# Refunction
+[![Build Status](https://travis-ci.com/ostenbom/refunction.svg?branch=master)](https://travis-ci.com/ostenbom/refunction)
+
 Reusing containers for faster serverless function execution - Masters Project @ Imperial College
 
 The latest fad in lightweight virtualisation primitives is known as serverless.  Rather than renting a portion of a server via a container or VM on a monthly basis, serverless platforms promise billing by the 1/10th of a second and infinite scaling exactly according to demand with almost no configuration. These features promise reduced developer operations, a lower barrier to entry for the cloud and reduced running costs.
