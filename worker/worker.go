@@ -72,25 +72,25 @@ func (m *Worker) Start() error {
 		containerd.WithNewSpec(oci.WithProcessArgs(m.targetSnapshot)),
 	)
 	if err != nil {
-		return err
+		return fmt.Errorf("could not create worker container: %s", err)
 	}
 
 	m.container = container
 
 	task, err := container.NewTask(m.ctx, m.creator)
 	if err != nil {
-		return err
+		return fmt.Errorf("could not create worker task: %s", err)
 	}
 	m.task = task
 
 	taskExitChan, err := task.Wait(m.ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("could not create worker task channel: %s", err)
 	}
 	m.taskExitChan = taskExitChan
 
 	if err := task.Start(m.ctx); err != nil {
-		return err
+		return fmt.Errorf("could not start worker task: %s", err)
 	}
 
 	m.attached = false

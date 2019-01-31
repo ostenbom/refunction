@@ -1,0 +1,27 @@
+dist: xenial
+sudo: required
+
+language: go
+go:
+  - 1.11.x
+  - tip
+
+matrix:
+  allow_failures:
+    - go: tip
+
+before_install:
+  - sudo apt-get install -y libseccomp-dev
+
+install:
+  - wget https://github.com/containerd/containerd/releases/download/v1.2.2/containerd-1.2.2.linux-amd64.tar.gz
+  - tar -xvf containerd-1.2.2.linux-amd64.tar.gz
+  - export PATH=$PATH:$PWD/bin/
+  - go get github.com/opencontainers/runc
+  - pushd $GOPATH/src/github.com/opencontainers/runc && make && sudo make install && popd
+  - go get -t -v ./...
+  - go get github.com/onsi/ginkgo/ginkgo
+  - go get github.com/onsi/gomega/...
+  - export PATH=$PATH:$HOME/gopath/bin
+
+script: ginkgo -r --randomizeAllSpecs --randomizeSuites
