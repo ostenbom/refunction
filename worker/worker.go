@@ -14,6 +14,7 @@ import (
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/oci"
+	. "github.com/ostenbom/refunction/worker/state"
 )
 
 func NewWorker(id string, client *containerd.Client, targetSnapshot string) (*Worker, error) {
@@ -186,27 +187,12 @@ func (m *Worker) GetState() (*State, error) {
 		defer m.Continue()
 	}
 
-	var state State
-	pid := int(m.task.Pid())
-	err := syscall.PtraceGetRegs(pid, &state.registers)
+	state, err := NewState(int(m.task.Pid()))
 	if err != nil {
-		return nil, fmt.Errorf("could not get regs: %s", err)
+		return nil, fmt.Errorf("could not get state: %s", err)
 	}
 
-	memoryLocations, err := NewMemoryLocations(pid)
-	if err != nil {
-		return nil, fmt.Errorf("could not get memory locations: %s", err)
-	}
-	state.memoryLocations = memoryLocations
-
-	fileDescriptors, err := NewFileDescriptors(pid)
-	if err != nil {
-		return nil, fmt.Errorf("could not create file descriptor state: %s", err)
-	}
-	state.fileDescriptors = fileDescriptors
-
-	state.pid = pid
-	return &state, nil
+	return state, nil
 }
 
 func (m *Worker) SetRegs(state *State) error {
@@ -218,8 +204,7 @@ func (m *Worker) SetRegs(state *State) error {
 		defer m.Continue()
 	}
 
-	pid := int(m.task.Pid())
-	err := syscall.PtraceSetRegs(pid, &state.registers)
+	err := state.RestoreRegs()
 	if err != nil {
 		return fmt.Errorf("could not set regs: %s", err)
 	}
