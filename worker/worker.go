@@ -198,8 +198,14 @@ func (m *Worker) GetState() (*State, error) {
 		return nil, fmt.Errorf("could not get memory locations: %s", err)
 	}
 	state.memoryLocations = memoryLocations
-	state.pid = pid
 
+	fileDescriptors, err := NewFileDescriptors(pid)
+	if err != nil {
+		return nil, fmt.Errorf("could not create file descriptor state: %s", err)
+	}
+	state.fileDescriptors = fileDescriptors
+
+	state.pid = pid
 	return &state, nil
 }
 

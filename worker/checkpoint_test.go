@@ -75,6 +75,7 @@ var _ = Describe("Worker Manager checkpointing", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(dirtyHeap).NotTo(Equal(0))
 			})
+
 		})
 
 		Context("for loop stack", func() {
@@ -129,6 +130,32 @@ var _ = Describe("Worker Manager checkpointing", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(changed).To(BeFalse())
 			})
+
+			It("has three file descriptors", func() {
+				Expect(worker.Attach()).To(Succeed())
+				defer worker.Detach()
+
+				state, err := worker.GetState()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(worker.Continue()).To(Succeed())
+
+				Expect(len(state.GetFileDescriptors())).To(Equal(3))
+			})
+
+			It("has no changes in files", func() {
+				Expect(worker.Attach()).To(Succeed())
+				defer worker.Detach()
+
+				state, err := worker.GetState()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(worker.Continue()).To(Succeed())
+
+				time.Sleep(time.Millisecond * 60)
+				Expect(worker.Stop()).To(Succeed())
+				changed, err := state.FdsChanged()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(changed).To(BeFalse())
+			})
 		})
 
 		Context("expanding heap", func() {
@@ -147,6 +174,27 @@ var _ = Describe("Worker Manager checkpointing", func() {
 				time.Sleep(time.Millisecond * 100)
 				Expect(worker.Stop()).To(Succeed())
 				changed, err := state.MemoryChanged()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(changed).To(BeTrue())
+			})
+		})
+
+		Context("opened files", func() {
+			BeforeEach(func() {
+				targetLayer = "fileopener"
+			})
+
+			It("notices changes in files", func() {
+				Expect(worker.Attach()).To(Succeed())
+				defer worker.Detach()
+
+				state, err := worker.GetState()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(worker.Continue()).To(Succeed())
+
+				time.Sleep(time.Millisecond * 60)
+				Expect(worker.Stop()).To(Succeed())
+				changed, err := state.FdsChanged()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(changed).To(BeTrue())
 			})
