@@ -6,7 +6,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"testing"
 
 	"code.cloudfoundry.org/guardian/gqt/containerdrunner"
@@ -14,13 +13,14 @@ import (
 	"github.com/containerd/containerd"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gexec"
 )
 
 var (
 	runDir string
 	config containerdrunner.Config
 	client *containerd.Client
-	server *exec.Cmd
+	server *gexec.Session
 )
 
 func TestWorker(t *testing.T) {
@@ -44,10 +44,7 @@ var _ = AfterEach(func() {
 	err := client.Close()
 	Expect(err).NotTo(HaveOccurred())
 
-	err = server.Process.Signal(syscall.SIGINT)
-	Expect(err).NotTo(HaveOccurred())
-	_, err = server.Process.Wait()
-	Expect(err).NotTo(HaveOccurred())
+	Expect(server.Terminate().Wait()).To(gexec.Exit(0))
 
 	// Attempt to unmount, ignoring errors
 	out, _ := exec.Command("grep", runDir, "/proc/mounts").Output()
@@ -62,16 +59,17 @@ var _ = AfterEach(func() {
 	os.RemoveAll("/var/run/containerd/runc/refunction-worker1")
 })
 
-func NewServer(runDir string, config containerdrunner.Config) *exec.Cmd {
+func NewServer(runDir string, config containerdrunner.Config) *gexec.Session {
 	configFile, err := os.OpenFile(filepath.Join(runDir, "containerd.toml"), os.O_TRUNC|os.O_WRONLY|os.O_CREATE, os.ModePerm)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(toml.NewEncoder(configFile).Encode(&config)).To(Succeed())
 	Expect(configFile.Close()).To(Succeed())
 
 	cmd := exec.Command("containerd", "--config", configFile.Name())
+	session, err := gexec.Start(cmd, GinkgoWriter, GinkgoWriter)
 	err = cmd.Start()
 	Expect(err).NotTo(HaveOccurred())
-	return cmd
+	return session
 }
 
 func GetContainerdClient(socketAddr string) (*containerd.Client, error) {
