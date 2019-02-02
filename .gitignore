@@ -13,3 +13,4 @@
 
 # Don't store runtimes, we will download them via scripts
 worker/runtimes/*
+getruntimes/aws_env

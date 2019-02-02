@@ -23,5 +23,6 @@ install:
   - go get github.com/onsi/ginkgo/ginkgo
   - go get github.com/onsi/gomega/...
   - export PATH=$PATH:$HOME/gopath/bin
+  - ./getruntimes/download_runtimes.sh
 
 script: sudo env "PATH=$PATH" ginkgo -r --randomizeAllSpecs --randomizeSuites
