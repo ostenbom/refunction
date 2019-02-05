@@ -6,14 +6,26 @@ if [ "$#" -ne 1 ]; then
   exit 1
 fi
 imagename=$1
+scriptdir=$(cd `dirname $0` && pwd)
 
-cd ../images/"$imagename"
-make
-cd -
+if [ -f "$scriptdir"/../images/"$imagename"/Makefile ]; then
+  pushd "$scriptdir"/../images/"$imagename"
+  make
+  popd
+fi
 
-mkdir -p "$imagename"/bin
-cp ../images/"$imagename"/"$imagename" "$imagename"/bin/"$imagename"
-cd "$imagename"
+mkdir -p "$scriptdir"/"$imagename"
+
+for f in "$scriptdir"/../images/"$imagename"/*; do
+  if [[ "$f" =~ .*\....?$ ]]; then
+    cp "$f" "$scriptdir"/"$imagename"
+  else
+    mkdir -p "$scriptdir"/"$imagename"/bin
+    cp "$f" "$scriptdir"/"$imagename"/bin/
+  fi
+done
+
+pushd "$scriptdir"/"$imagename"
 tar -cvf layer.tar .
-cd ..
-rm -rf "${imagename:?}"/bin
+find . ! -name layer.tar -exec rm -rf {} +
+popd

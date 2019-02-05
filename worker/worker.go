@@ -28,6 +28,7 @@ func NewWorker(id string, client *containerd.Client, runtime, targetSnapshot str
 	return &Worker{
 		ID:             id,
 		targetSnapshot: targetSnapshot,
+		runtime:        runtime,
 		client:         client,
 		ctx:            ctx,
 		creator:        cio.NullIO,
@@ -38,6 +39,7 @@ func NewWorker(id string, client *containerd.Client, runtime, targetSnapshot str
 type Worker struct {
 	ID             string
 	targetSnapshot string
+	runtime        string
 	client         *containerd.Client
 	ctx            context.Context
 	creator        cio.Creator
@@ -65,11 +67,18 @@ func (m *Worker) Start() error {
 		return err
 	}
 
+	var processArgs []string
+	if m.runtime != "alpine" {
+		processArgs = []string{m.runtime, m.targetSnapshot}
+	} else {
+		processArgs = []string{m.targetSnapshot}
+	}
+
 	container, err := m.client.NewContainer(
 		m.ctx,
 		containerID,
 		containerd.WithSnapshot(containerID),
-		containerd.WithNewSpec(oci.WithProcessArgs(m.targetSnapshot)),
+		containerd.WithNewSpec(oci.WithProcessArgs(processArgs...)),
 	)
 	if err != nil {
 		return fmt.Errorf("could not create worker container: %s", err)
@@ -151,12 +160,9 @@ func (m *Worker) Continue() error {
 }
 
 func (m *Worker) SendEnableSignal() error {
-	pid, err := m.Pid()
-	if err != nil {
-		return err
-	}
+	pid := int(m.task.Pid())
 
-	err = syscall.Kill(int(pid), syscall.SIGUSR1)
+	err := syscall.Kill(pid, syscall.SIGUSR1)
 	if err != nil {
 		return err
 	}
