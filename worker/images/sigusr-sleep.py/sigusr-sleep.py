@@ -16,7 +16,7 @@ signal.signal(signal.SIGUSR1, activate)
 while not activated:
     signal.pause()
 
-f = open("count.txt", "a")
+f = open("/tmp/count.txt", "a")
 count = 0
 while True:
     f.write("at: " + str(count) + "\n")

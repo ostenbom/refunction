@@ -43,7 +43,7 @@ int main() {
   printf("I have been USR sigg'd\n");
 
   FILE *fp;
-  fp = fopen("count.txt", "w+");
+  fp = fopen("/tmp/count.txt", "w+");
 
   struct timespec wait;
   wait.tv_sec = 0;

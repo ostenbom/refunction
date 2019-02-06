@@ -38,7 +38,7 @@ func main() {
 		time.Sleep(10)
 	}
 
-	f, openErr := os.OpenFile("count.txt", os.O_CREATE|os.O_TRUNC|os.O_APPEND|os.O_WRONLY, 0600)
+	f, openErr := os.OpenFile("/tmp/count.txt", os.O_CREATE|os.O_TRUNC|os.O_APPEND|os.O_WRONLY, 0600)
 	if openErr != nil {
 		panic(openErr)
 	}

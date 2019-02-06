@@ -43,7 +43,7 @@ var _ = Describe("Worker Manager using python runtime", func() {
 		})
 
 		It("does not create the count file on start", func() {
-			countLocation := getRootfs(worker, "sigusr-sleep.py") + "count.txt"
+			countLocation := getRootfs(worker, "sigusr-sleep.py") + "tmp/count.txt"
 
 			if _, err := os.Stat(countLocation); !os.IsNotExist(err) {
 				Fail("count file exists without SIGUSR1")
@@ -57,7 +57,7 @@ var _ = Describe("Worker Manager using python runtime", func() {
 			err := worker.SendEnableSignal()
 			Expect(err).NotTo(HaveOccurred())
 
-			countLocation := getRootfs(worker, "sigusr-sleep.py") + "count.txt"
+			countLocation := getRootfs(worker, "sigusr-sleep.py") + "tmp/count.txt"
 
 			Eventually(func() bool {
 				_, err := os.Stat(countLocation)
@@ -100,7 +100,7 @@ var _ = Describe("Worker Manager using python runtime", func() {
 			err := worker.SendEnableSignal()
 			Expect(err).NotTo(HaveOccurred())
 
-			countLocation := getRootfs(worker, "sigusr-sleep.py") + "count.txt"
+			countLocation := getRootfs(worker, "sigusr-sleep.py") + "tmp/count.txt"
 
 			Eventually(func() bool {
 				_, err = os.Stat(countLocation)
@@ -139,7 +139,7 @@ var _ = Describe("Worker Manager using c-sigusr-sleep image", func() {
 		})
 
 		It("does not create the count file on start", func() {
-			countLocation := getRootfs(worker, "c-sigusr-sleep") + "count.txt"
+			countLocation := getRootfs(worker, "c-sigusr-sleep") + "tmp/count.txt"
 
 			if _, err := os.Stat(countLocation); !os.IsNotExist(err) {
 				Fail("count file exists without SIGUSR1")
@@ -151,7 +151,7 @@ var _ = Describe("Worker Manager using c-sigusr-sleep image", func() {
 			err := worker.SendEnableSignal()
 			Expect(err).NotTo(HaveOccurred())
 
-			countLocation := getRootfs(worker, "c-sigusr-sleep") + "count.txt"
+			countLocation := getRootfs(worker, "c-sigusr-sleep") + "tmp/count.txt"
 
 			Eventually(func() bool {
 				_, err := os.Stat(countLocation)
@@ -172,6 +172,7 @@ var _ = Describe("Worker Manager using c-sigusr-sleep image", func() {
 
 		It("is in a stopped state after attaching", func() {
 			Expect(worker.Attach()).To(Succeed())
+			defer worker.Detach()
 
 			pid, err := worker.Pid()
 			Expect(err).NotTo(HaveOccurred())
@@ -180,26 +181,22 @@ var _ = Describe("Worker Manager using c-sigusr-sleep image", func() {
 
 			// t = stopped by debugger. T = stopped by signal
 			Expect(strings.Contains(processState, "t")).To(BeTrue())
-
-			Expect(worker.Detach()).To(Succeed())
 		})
 
 		It("creates a count file if allowed to continue, given SIGUSR1", func() {
 			Expect(worker.Attach()).To(Succeed())
+			defer worker.Detach()
 			Expect(worker.Continue()).To(Succeed())
 
 			err := worker.SendEnableSignal()
 			Expect(err).NotTo(HaveOccurred())
 
-			countLocation := getRootfs(worker, "c-sigusr-sleep") + "count.txt"
+			countLocation := getRootfs(worker, "c-sigusr-sleep") + "tmp/count.txt"
 
 			Eventually(func() bool {
 				_, err = os.Stat(countLocation)
 				return os.IsNotExist(err)
 			}).Should(BeFalse())
-
-			err = worker.Detach()
-			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 })
@@ -238,7 +235,7 @@ var _ = Describe("Worker Manager using go-ptrace-sleep image", func() {
 		})
 
 		It("does not create the count file on start", func() {
-			countLocation := getRootfs(manager, "go-ptrace-sleep") + "count.txt"
+			countLocation := getRootfs(manager, "go-ptrace-sleep") + "tmp/count.txt"
 
 			if _, err := os.Stat(countLocation); !os.IsNotExist(err) {
 				Fail("count file exists without SIGUSR1")
@@ -250,7 +247,7 @@ var _ = Describe("Worker Manager using go-ptrace-sleep image", func() {
 			err := manager.SendEnableSignal()
 			Expect(err).NotTo(HaveOccurred())
 
-			countLocation := getRootfs(manager, "go-ptrace-sleep") + "count.txt"
+			countLocation := getRootfs(manager, "go-ptrace-sleep") + "tmp/count.txt"
 
 			Eventually(func() bool {
 				_, err := os.Stat(countLocation)
@@ -271,6 +268,7 @@ var _ = Describe("Worker Manager using go-ptrace-sleep image", func() {
 
 		It("is in a stopped state after attaching", func() {
 			Expect(manager.Attach()).To(Succeed())
+			defer manager.Detach()
 
 			pid, err := manager.Pid()
 			Expect(err).NotTo(HaveOccurred())
@@ -279,8 +277,6 @@ var _ = Describe("Worker Manager using go-ptrace-sleep image", func() {
 
 			// t = stopped by debugger. T = stopped by signal
 			Expect(strings.Contains(processState, "t")).To(BeTrue())
-
-			Expect(manager.Detach()).To(Succeed())
 		})
 	})
 

@@ -99,6 +99,15 @@ func (m *SnapshotManager) CreateLayerFromBase(layerName string) error {
 	return m.createLayer(layerName, layerPath, m.runtime)
 }
 
+func (m *SnapshotManager) CreateRoView(layerName, containerName string) ([]mount.Mount, error) {
+	mounts, err := m.snapshotter.View(m.ctx, containerName, layerName, m.noGc)
+	if err != nil {
+		return nil, err
+	}
+
+	return mounts, nil
+}
+
 func (m *SnapshotManager) GetRwMounts(layerName, containerName string) ([]mount.Mount, error) {
 	mounts, err := m.snapshotter.Prepare(m.ctx, containerName, layerName, m.noGc)
 	if err != nil {

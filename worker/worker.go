@@ -5,15 +5,18 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"os"
 	"runtime"
 	"syscall"
 
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/cio"
+	"github.com/containerd/containerd/containers"
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/oci"
+	specs "github.com/opencontainers/runtime-spec/specs-go"
 	. "github.com/ostenbom/refunction/worker/state"
 )
 
@@ -49,10 +52,23 @@ type Worker struct {
 	taskExitChan   <-chan containerd.ExitStatus
 	attached       bool
 	stopped        bool
+	IP             net.IP
 }
 
 func (m *Worker) WithCreator(creator cio.Creator) {
 	m.creator = creator
+}
+
+func WithNetNsHook(ipFile string) oci.SpecOpts {
+	return func(_ context.Context, _ oci.Client, _ *containers.Container, s *oci.Spec) error {
+		s.Hooks = &specs.Hooks{
+			Prestart: []specs.Hook{specs.Hook{
+				Path: "/usr/local/bin/netns",
+				Args: []string{"netns", "--ipfile", ipFile},
+			}},
+		}
+		return nil
+	}
 }
 
 func (m *Worker) Start() error {
@@ -74,11 +90,21 @@ func (m *Worker) Start() error {
 		processArgs = []string{m.targetSnapshot}
 	}
 
+	ipFile, err := ioutil.TempFile("", "container-ip")
+	ipFileName := ipFile.Name()
+	if err != nil {
+		return fmt.Errorf("could not make tmp ip file: %s", err)
+	}
+	err = ipFile.Close()
+	if err != nil {
+		return fmt.Errorf("could not close container ip file: %s", err)
+	}
+
 	container, err := m.client.NewContainer(
 		m.ctx,
 		containerID,
 		containerd.WithSnapshot(containerID),
-		containerd.WithNewSpec(oci.WithProcessArgs(processArgs...)),
+		containerd.WithNewSpec(WithNetNsHook(ipFileName), oci.WithProcessArgs(processArgs...)),
 	)
 	if err != nil {
 		return fmt.Errorf("could not create worker container: %s", err)
@@ -98,9 +124,17 @@ func (m *Worker) Start() error {
 	}
 	m.taskExitChan = taskExitChan
 
-	if err := task.Start(m.ctx); err != nil {
+	err = task.Start(m.ctx)
+	if err != nil {
 		return fmt.Errorf("could not start worker task: %s", err)
 	}
+
+	ipBytes, err := ioutil.ReadFile(ipFileName)
+	if err != nil {
+		return fmt.Errorf("could not read container ip file: %s", err)
+	}
+
+	m.IP = net.ParseIP(string(ipBytes))
 
 	m.attached = false
 	m.stopped = false
