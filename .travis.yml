@@ -19,8 +19,8 @@ install:
   - export PATH=$PATH:$PWD/bin/
   - go get github.com/opencontainers/runc
   - pushd $GOPATH/src/github.com/opencontainers/runc && make && sudo make install && popd
-  - curl -fSL "https://github.com/genuinetools/netns/releases/download/v0.5.3/netns-linux-amd64" -o /usr/local/bin/netns
-  - chmod a+x /usr/local/bin/netns
+  - sudo curl -fSL "https://github.com/genuinetools/netns/releases/download/v0.5.3/netns-linux-amd64" -o /usr/local/bin/netns
+  - sudo chmod a+x /usr/local/bin/netns
   - go get -t -v ./...
   - go get github.com/onsi/ginkgo/ginkgo
   - go get github.com/onsi/gomega/...

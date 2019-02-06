@@ -1,6 +1,5 @@
-print('HERE WE ARE -----------------------------------------\n', flush=True)
 import socket
-#
+
 BUFFER_SIZE = 20  # Normally 1024, but we want fast response
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 print(s, flush=True)

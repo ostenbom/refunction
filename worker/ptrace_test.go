@@ -6,7 +6,6 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
-	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -52,7 +51,7 @@ var _ = Describe("Worker Manager using python runtime", func() {
 
 		It("creates the count file after SIGUSR1", func() {
 			// How long does it take to start a python runtime??
-			time.Sleep(time.Millisecond * 200)
+			Expect(worker.AwaitOnline()).To(Succeed())
 			// Send custom "ready" signal to container
 			err := worker.SendEnableSignal()
 			Expect(err).NotTo(HaveOccurred())
@@ -69,8 +68,7 @@ var _ = Describe("Worker Manager using python runtime", func() {
 	Describe("Ptracing", func() {
 		BeforeEach(func() {
 			Expect(worker.Start()).To(Succeed())
-			// How long does it take to start a python runtime??
-			time.Sleep(time.Millisecond * 200)
+			Expect(worker.AwaitOnline()).To(Succeed())
 		})
 
 		It("can attach and detach", func() {

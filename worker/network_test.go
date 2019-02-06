@@ -5,7 +5,6 @@ import (
 	"net"
 	"strconv"
 
-	"github.com/containerd/containerd/cio"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -28,7 +27,6 @@ var _ = Describe("Network", func() {
 		JustBeforeEach(func() {
 			var err error
 			worker, err = NewWorker(id, client, runtime, targetLayer)
-			worker.WithCreator(cio.NewCreator(cio.WithStreams(nil, GinkgoWriter, GinkgoWriter)))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(worker.Start()).To(Succeed())
 		})

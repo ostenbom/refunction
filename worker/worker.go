@@ -142,6 +142,35 @@ func (m *Worker) Start() error {
 	return nil
 }
 
+func (m *Worker) AwaitOnline() error {
+	tcpAddr := net.TCPAddr{
+		IP:   m.IP,
+		Port: 5000,
+	}
+
+	conn, err := net.DialTCP("tcp", nil, &tcpAddr)
+	if err != nil {
+		return fmt.Errorf("could not dial worker: %s", err)
+	}
+	defer conn.Close()
+
+	writeBytes := []byte("hello there!\n")
+	_, err = conn.Write(writeBytes)
+	if err != nil {
+		return fmt.Errorf("could not write to worker: %s", err)
+	}
+
+	result, err := ioutil.ReadAll(conn)
+	if err != nil {
+		return fmt.Errorf("could not read from worker: %s", err)
+	}
+	if len(result) != len(writeBytes) {
+		return fmt.Errorf("worker did not echo")
+	}
+
+	return nil
+}
+
 func (m *Worker) Attach() error {
 	// Crucial: trying to detach from a different thread
 	// than the attacher causes undefined behaviour
