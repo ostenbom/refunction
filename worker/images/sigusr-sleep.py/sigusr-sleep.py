@@ -1,8 +1,10 @@
+import time
+start_time = time.time()
+
 import os
 import signal
 import socket
 import select
-import time
 
 prevMask = signal.pthread_sigmask(signal.SIG_BLOCK, [])
 block = set(signal.Signals) - {signal.SIGUSR1}
@@ -21,8 +23,10 @@ s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 s.bind(('', 5000))
 s.listen(1)
 
+ready_time = time.time()
+print("ready time", abs(start_time - ready_time), "at", time.time(), flush=True)
 while not activated:
-    readready, _, _ = select.select([s], [], [], 0.01)
+    readready, _, _ = select.select([s], [], [], 0.001)
     if len(readready):
         conn, addr = s.accept()
         data = conn.recv(20)
@@ -35,9 +39,9 @@ s.close()
 f = open("/tmp/count.txt", "a")
 count = 0
 while True:
-    f.write("at: " + str(count) + "\n")
+    f.write("at: " + str(count) + "\n" )
     f.flush()
-    print("at:", count)
+    print("at:", count, flush=True)
     count += 1
     time.sleep(0.05)
 

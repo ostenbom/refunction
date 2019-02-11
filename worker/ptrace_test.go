@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/containerd/containerd/cio"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -23,6 +24,7 @@ var _ = Describe("Worker Manager using python runtime", func() {
 		id := strconv.Itoa(GinkgoParallelNode())
 		worker, err = NewWorker(id, client, runtime, image)
 		Expect(err).NotTo(HaveOccurred())
+		worker.WithCreator(cio.NewCreator(cio.WithStreams(nil, GinkgoWriter, GinkgoWriter)))
 	})
 
 	AfterEach(func() {

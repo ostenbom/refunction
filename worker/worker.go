@@ -9,6 +9,7 @@ import (
 	"os"
 	"runtime"
 	"syscall"
+	"time"
 
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/cio"
@@ -148,11 +149,15 @@ func (m *Worker) AwaitOnline() error {
 		Port: 5000,
 	}
 
+	fmt.Println(m.IP)
+	fmt.Printf("Before dial: %d\n", time.Now().UnixNano())
+	dialStart := time.Now()
 	conn, err := net.DialTCP("tcp", nil, &tcpAddr)
 	if err != nil {
 		return fmt.Errorf("could not dial worker: %s", err)
 	}
 	defer conn.Close()
+	fmt.Printf("dial time: %s\n", time.Since(dialStart))
 
 	writeBytes := []byte("hello there!\n")
 	_, err = conn.Write(writeBytes)
