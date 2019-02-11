@@ -52,8 +52,8 @@ var _ = Describe("Worker Manager using python runtime", func() {
 		})
 
 		It("creates the count file after SIGUSR1", func() {
-			// How long does it take to start a python runtime??
 			Expect(worker.AwaitOnline()).To(Succeed())
+
 			// Send custom "ready" signal to container
 			err := worker.SendEnableSignal()
 			Expect(err).NotTo(HaveOccurred())
@@ -291,5 +291,5 @@ func getPidState(pid uint32) string {
 }
 
 func getRootfs(manager *Worker, imageName string) string {
-	return fmt.Sprintf("%s/io.containerd.runtime.v1.linux/refunction-worker%s/%s-%s/rootfs/", config.State, manager.ID, imageName, manager.ID)
+	return fmt.Sprintf("%s/io.containerd.runtime.v1.linux/refunction-worker%s/%s/rootfs/", config.State, manager.ID, manager.ContainerID)
 }

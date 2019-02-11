@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"net"
 	"os"
 	"runtime"
@@ -42,6 +43,7 @@ func NewWorker(id string, client *containerd.Client, runtime, targetSnapshot str
 
 type Worker struct {
 	ID             string
+	ContainerID    string
 	targetSnapshot string
 	runtime        string
 	client         *containerd.Client
@@ -78,8 +80,8 @@ func (m *Worker) Start() error {
 		return err
 	}
 
-	containerID := m.targetSnapshot + "-" + m.ID
-	_, err = m.snapManager.GetRwMounts(m.targetSnapshot, containerID)
+	m.ContainerID = fmt.Sprintf("%s-%s-%d", m.targetSnapshot, m.ID, rand.Intn(100))
+	_, err = m.snapManager.GetRwMounts(m.targetSnapshot, m.ContainerID)
 	if err != nil {
 		return err
 	}
@@ -103,8 +105,8 @@ func (m *Worker) Start() error {
 
 	container, err := m.client.NewContainer(
 		m.ctx,
-		containerID,
-		containerd.WithSnapshot(containerID),
+		m.ContainerID,
+		containerd.WithSnapshot(m.ContainerID),
 		containerd.WithNewSpec(WithNetNsHook(ipFileName), oci.WithProcessArgs(processArgs...)),
 	)
 	if err != nil {

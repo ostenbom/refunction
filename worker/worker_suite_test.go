@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"code.cloudfoundry.org/guardian/gqt/containerdrunner"
@@ -46,17 +45,7 @@ var _ = AfterEach(func() {
 
 	Expect(server.Terminate().Wait()).To(gexec.Exit(0))
 
-	// Attempt to unmount, ignoring errors
-	out, _ := exec.Command("grep", runDir, "/proc/mounts").Output()
-	if string(out) != "" {
-		mount := strings.Fields(string(out))[1]
-		_, err := exec.Command("umount", "-r", mount).Output()
-		Expect(err).NotTo(HaveOccurred())
-	}
-
 	Expect(os.RemoveAll(runDir)).To(Succeed())
-	// Ignore errors
-	os.RemoveAll("/var/run/containerd/runc/refunction-worker1")
 })
 
 func NewServer(runDir string, config containerdrunner.Config) *gexec.Session {
