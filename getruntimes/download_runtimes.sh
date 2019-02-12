@@ -6,7 +6,7 @@ scriptdir=$(cd `dirname $0` && pwd)
 declare -a runtimes=(
 		      "alpine"
 		      "python"
-		      "node"
+		      # "node"
 		    )
 
 for runtime in "${runtimes[@]}"

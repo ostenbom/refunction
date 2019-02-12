@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/containerd/containerd/cio"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -24,7 +23,6 @@ var _ = Describe("Worker Manager using python runtime", func() {
 		id := strconv.Itoa(GinkgoParallelNode())
 		worker, err = NewWorker(id, client, runtime, image)
 		Expect(err).NotTo(HaveOccurred())
-		worker.WithCreator(cio.NewCreator(cio.WithStreams(nil, GinkgoWriter, GinkgoWriter)))
 	})
 
 	AfterEach(func() {
@@ -52,7 +50,10 @@ var _ = Describe("Worker Manager using python runtime", func() {
 		})
 
 		It("creates the count file after SIGUSR1", func() {
-			Expect(worker.AwaitOnline()).To(Succeed())
+			Expect(worker.Attach()).To(Succeed())
+			defer worker.Detach()
+			Expect(worker.Continue()).To(Succeed())
+			Expect(worker.AwaitSignal()).To(Succeed())
 
 			// Send custom "ready" signal to container
 			err := worker.SendEnableSignal()
@@ -70,7 +71,6 @@ var _ = Describe("Worker Manager using python runtime", func() {
 	Describe("Ptracing", func() {
 		BeforeEach(func() {
 			Expect(worker.Start()).To(Succeed())
-			Expect(worker.AwaitOnline()).To(Succeed())
 		})
 
 		It("can attach and detach", func() {
@@ -96,6 +96,7 @@ var _ = Describe("Worker Manager using python runtime", func() {
 			Expect(worker.Attach()).To(Succeed())
 			defer worker.Detach()
 			Expect(worker.Continue()).To(Succeed())
+			Expect(worker.AwaitSignal()).To(Succeed())
 
 			err := worker.SendEnableSignal()
 			Expect(err).NotTo(HaveOccurred())

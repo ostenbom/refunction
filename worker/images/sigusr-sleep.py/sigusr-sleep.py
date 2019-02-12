@@ -7,7 +7,7 @@ import socket
 import select
 
 prevMask = signal.pthread_sigmask(signal.SIG_BLOCK, [])
-block = set(signal.Signals) - {signal.SIGUSR1}
+block = set(signal.Signals) - {signal.SIGUSR1, signal.SIGUSR2}
 signal.pthread_sigmask(signal.SIG_BLOCK, list(block))
 
 activated = False
@@ -17,24 +17,18 @@ def activate(signum, frame):
     activated = True
     signal.pthread_sigmask(signal.SIG_SETMASK, prevMask)
 
-signal.signal(signal.SIGUSR1, activate)
+def nothing(signum, frame):
+    pass
 
-s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-s.bind(('', 5000))
-s.listen(1)
+signal.signal(signal.SIGUSR1, activate)
+signal.signal(signal.SIGUSR2, nothing)
 
 ready_time = time.time()
 print("ready time", abs(start_time - ready_time), "at", time.time(), flush=True)
 while not activated:
-    readready, _, _ = select.select([s], [], [], 0.001)
-    if len(readready):
-        conn, addr = s.accept()
-        data = conn.recv(20)
-        if data:
-            conn.send(data)
-        conn.close()
-
-s.close()
+    print("sending signal")
+    os.kill(os.getpid(), signal.SIGUSR2)
+    time.sleep(0.01)
 
 f = open("/tmp/count.txt", "a")
 count = 0

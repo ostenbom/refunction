@@ -10,7 +10,6 @@ import (
 	"os"
 	"runtime"
 	"syscall"
-	"time"
 
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/cio"
@@ -146,20 +145,16 @@ func (m *Worker) Start() error {
 }
 
 func (m *Worker) AwaitOnline() error {
-	tcpAddr := net.TCPAddr{
+	udpAddr := net.UDPAddr{
 		IP:   m.IP,
 		Port: 5000,
 	}
 
-	fmt.Println(m.IP)
-	fmt.Printf("Before dial: %d\n", time.Now().UnixNano())
-	dialStart := time.Now()
-	conn, err := net.DialTCP("tcp", nil, &tcpAddr)
+	conn, err := net.DialUDP("udp", nil, &udpAddr)
 	if err != nil {
 		return fmt.Errorf("could not dial worker: %s", err)
 	}
 	defer conn.Close()
-	fmt.Printf("dial time: %s\n", time.Since(dialStart))
 
 	writeBytes := []byte("hello there!\n")
 	_, err = conn.Write(writeBytes)
@@ -167,12 +162,33 @@ func (m *Worker) AwaitOnline() error {
 		return fmt.Errorf("could not write to worker: %s", err)
 	}
 
-	result, err := ioutil.ReadAll(conn)
+	result := make([]byte, len(writeBytes))
+	_, err = conn.Read(result)
 	if err != nil {
 		return fmt.Errorf("could not read from worker: %s", err)
 	}
+
 	if len(result) != len(writeBytes) {
-		return fmt.Errorf("worker did not echo")
+		return fmt.Errorf("worker did not echo: %s", string(result))
+	}
+
+	return nil
+}
+
+func (m *Worker) AwaitSignal() error {
+	pid := int(m.task.Pid())
+
+	var waitStat syscall.WaitStatus
+	for waitStat.StopSignal() != syscall.SIGUSR2 {
+		_, err := syscall.Wait4(pid, &waitStat, 0, nil)
+		if err != nil {
+			return err
+		}
+
+		err = syscall.PtraceCont(int(pid), int(waitStat.StopSignal()))
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
