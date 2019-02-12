@@ -42,7 +42,7 @@ var _ = Describe("Worker Manager using python runtime", func() {
 		})
 
 		It("does not create the count file on start", func() {
-			countLocation := getRootfs(worker, "sigusr-sleep.py") + "tmp/count.txt"
+			countLocation := getRootfs(worker) + "tmp/count.txt"
 
 			if _, err := os.Stat(countLocation); !os.IsNotExist(err) {
 				Fail("count file exists without SIGUSR1")
@@ -59,7 +59,7 @@ var _ = Describe("Worker Manager using python runtime", func() {
 			err := worker.SendEnableSignal()
 			Expect(err).NotTo(HaveOccurred())
 
-			countLocation := getRootfs(worker, "sigusr-sleep.py") + "tmp/count.txt"
+			countLocation := getRootfs(worker) + "tmp/count.txt"
 
 			Eventually(func() bool {
 				_, err := os.Stat(countLocation)
@@ -101,7 +101,7 @@ var _ = Describe("Worker Manager using python runtime", func() {
 			err := worker.SendEnableSignal()
 			Expect(err).NotTo(HaveOccurred())
 
-			countLocation := getRootfs(worker, "sigusr-sleep.py") + "tmp/count.txt"
+			countLocation := getRootfs(worker) + "tmp/count.txt"
 
 			Eventually(func() bool {
 				_, err = os.Stat(countLocation)
@@ -140,7 +140,7 @@ var _ = Describe("Worker Manager using c-sigusr-sleep image", func() {
 		})
 
 		It("does not create the count file on start", func() {
-			countLocation := getRootfs(worker, "c-sigusr-sleep") + "tmp/count.txt"
+			countLocation := getRootfs(worker) + "tmp/count.txt"
 
 			if _, err := os.Stat(countLocation); !os.IsNotExist(err) {
 				Fail("count file exists without SIGUSR1")
@@ -152,7 +152,7 @@ var _ = Describe("Worker Manager using c-sigusr-sleep image", func() {
 			err := worker.SendEnableSignal()
 			Expect(err).NotTo(HaveOccurred())
 
-			countLocation := getRootfs(worker, "c-sigusr-sleep") + "tmp/count.txt"
+			countLocation := getRootfs(worker) + "tmp/count.txt"
 
 			Eventually(func() bool {
 				_, err := os.Stat(countLocation)
@@ -192,7 +192,7 @@ var _ = Describe("Worker Manager using c-sigusr-sleep image", func() {
 			err := worker.SendEnableSignal()
 			Expect(err).NotTo(HaveOccurred())
 
-			countLocation := getRootfs(worker, "c-sigusr-sleep") + "tmp/count.txt"
+			countLocation := getRootfs(worker) + "tmp/count.txt"
 
 			Eventually(func() bool {
 				_, err = os.Stat(countLocation)
@@ -236,7 +236,7 @@ var _ = Describe("Worker Manager using go-ptrace-sleep image", func() {
 		})
 
 		It("does not create the count file on start", func() {
-			countLocation := getRootfs(manager, "go-ptrace-sleep") + "tmp/count.txt"
+			countLocation := getRootfs(manager) + "tmp/count.txt"
 
 			if _, err := os.Stat(countLocation); !os.IsNotExist(err) {
 				Fail("count file exists without SIGUSR1")
@@ -248,7 +248,7 @@ var _ = Describe("Worker Manager using go-ptrace-sleep image", func() {
 			err := manager.SendEnableSignal()
 			Expect(err).NotTo(HaveOccurred())
 
-			countLocation := getRootfs(manager, "go-ptrace-sleep") + "tmp/count.txt"
+			countLocation := getRootfs(manager) + "tmp/count.txt"
 
 			Eventually(func() bool {
 				_, err := os.Stat(countLocation)
@@ -291,6 +291,6 @@ func getPidState(pid uint32) string {
 	return string(processState)
 }
 
-func getRootfs(manager *Worker, imageName string) string {
+func getRootfs(manager *Worker) string {
 	return fmt.Sprintf("%s/io.containerd.runtime.v1.linux/refunction-worker%s/%s/rootfs/", config.State, manager.ID, manager.ContainerID)
 }
