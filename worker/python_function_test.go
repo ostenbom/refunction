@@ -53,8 +53,22 @@ var _ = Describe("Python Serverless Function Management", func() {
 			Eventually(stdout).Should(gbytes.Say("starting function server"))
 
 			request := "{\"greatkey\": \"nicevalue\"}"
-			Expect(worker.SendRequest(request)).To(Succeed())
+			_, err := worker.SendRequest(request)
+			Expect(err).NotTo(HaveOccurred())
 			Eventually(stdout).Should(gbytes.Say(request))
+		})
+
+		It("can get a request response", func() {
+			// Initiate python ready sequence
+			Expect(worker.Activate()).To(Succeed())
+
+			function := "def handle(req):\n  print(req)\n  return req"
+			Expect(worker.SendFunction(function)).To(Succeed())
+
+			request := "{\"greatkey\": \"nicevalue\"}"
+			response, err := worker.SendRequest(request)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(request).To(Equal(response))
 		})
 	})
 })

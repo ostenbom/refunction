@@ -232,7 +232,7 @@ func (m *Worker) SendFunction(function string) error {
 	return nil
 }
 
-func (m *Worker) SendRequest(request string) error {
+func (m *Worker) SendRequest(request string) (string, error) {
 	udpAddr := net.TCPAddr{
 		IP:   m.IP,
 		Port: 5000,
@@ -240,16 +240,21 @@ func (m *Worker) SendRequest(request string) error {
 
 	conn, err := net.DialTCP("tcp", nil, &udpAddr)
 	if err != nil {
-		return fmt.Errorf("could not dial worker: %s", err)
+		return "", fmt.Errorf("could not dial worker: %s", err)
 	}
 	defer conn.Close()
 
 	_, err = conn.Write([]byte(request))
 	if err != nil {
-		return fmt.Errorf("could not write to worker: %s", err)
+		return "", fmt.Errorf("could not write to worker: %s", err)
 	}
 
-	return nil
+	response, err := ioutil.ReadAll(conn)
+	if err != nil {
+		return "", fmt.Errorf("could not get request response: %s", err)
+	}
+
+	return string(response), nil
 }
 
 func (m *Worker) AwaitSignal() error {

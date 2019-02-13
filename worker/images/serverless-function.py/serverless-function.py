@@ -41,13 +41,17 @@ def main():
 
     functionLoaded = False
 
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.bind(('', HOSTPORT))
+    s.listen()
     while not functionLoaded:
         print("loading function", flush=True)
-        functionLoaded = loadFunction()
+        functionLoaded = loadFunction(s)
 
 
     print("starting function server", flush=True)
-    startFunctionServer()
+    startFunctionServer(s)
+    s.close()
 
 def alertDone():
     os.kill(os.getpid(), signal.SIGUSR1)
@@ -55,8 +59,8 @@ def alertDone():
 def alertCheckpoint():
     os.kill(os.getpid(), signal.SIGUSR2)
 
-def loadFunction():
-    function = getFunctionJson()
+def loadFunction(s):
+    function = getFunctionJson(s)
 
     if "imports" in function:
         print("requested to import", function["imports"], flush=True)
@@ -69,26 +73,14 @@ def loadFunction():
     exec(function["handler"], globals())
     return True
 
-def startFunctionServer():
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.bind(('', HOSTPORT))
-    s.listen()
+def startFunctionServer(s):
     while True:
         conn, addr = s.accept()
-        total_data = []
-        while True:
-            data = conn.recv(1024)
-            if not data:
-                break
-            total_data.append(data)
-
-        decoded_data = [x.decode("utf-8") for x in total_data]
-
         request = ''
         try:
-            request = json.loads(''.join(decoded_data))
+            request = decodeSocketJson(conn)
         except ValueError as e:
-            print("could not load request to json", e, request, flush=True)
+            print("could not get request from socket", e, flush=True)
             conn.close()
             continue
 
@@ -104,29 +96,46 @@ def startFunctionServer():
             continue
 
         print("sending response:", response_string, flush=True)
-        conn.sendall(response_string.encode("utf-8"))
+        conn.send(response_string.encode("utf-8"))
+        try:
+            conn.shutdown(socket.SHUT_RDWR)
+        except OSError as e:
+            pass
         conn.close()
 
-def getFunctionJson():
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.bind(('', HOSTPORT))
-    s.listen()
-    data = getSocketJson(s)
-    s.close()
-    return data
-
-def getSocketJson(s):
+def getFunctionJson(s):
     print("waiting function json", flush=True)
     conn, addr = s.accept()
     print("accepting function json", flush=True)
-    total_data = []
-    while True:
-        data = conn.recv(1024)
-        if not data:
-            break
-        total_data.append(data)
+    function_json = decodeSocketJson(conn)
+    response = json.dumps({"success": True}).encode("utf-8")
+    conn.send(response)
+    try:
+        conn.shutdown(socket.SHUT_RDWR)
+    except OSError as e:
+        pass
     conn.close()
-    decoded_data = [x.decode("utf-8") for x in total_data]
-    return json.loads(''.join(decoded_data))
+    return function_json
+
+# Takes an accepted connection, decodes until well-formed json
+def decodeSocketJson(conn):
+    CHUNK_SIZE = 1024
+
+    total_data = []
+    loaded_data = ''
+    jsonDecoded = False
+    while not jsonDecoded:
+        data = conn.recv(CHUNK_SIZE)
+        if not data:
+            raise ValueError("connection did not send complete json")
+        total_data.append(data)
+        try:
+            decoded = [x.decode("utf-8") for x in total_data]
+            loaded_data = json.loads(''.join(decoded))
+            jsonDecoded = True
+        except json.JSONDecodeError as e:
+            continue
+
+    return loaded_data
 
 main()
