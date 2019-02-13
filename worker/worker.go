@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -52,9 +53,14 @@ type Worker struct {
 	container      containerd.Container
 	task           containerd.Task
 	taskExitChan   <-chan containerd.ExitStatus
+	checkpoints    []*State
 	attached       bool
 	stopped        bool
 	IP             net.IP
+}
+
+type LoadFunctionReq struct {
+	Handler string `json:"handler"`
 }
 
 func (m *Worker) WithCreator(creator cio.Creator) {
@@ -144,32 +150,103 @@ func (m *Worker) Start() error {
 	return nil
 }
 
-func (m *Worker) AwaitOnline() error {
-	udpAddr := net.UDPAddr{
+func (m *Worker) Activate() error {
+	err := m.Attach()
+	if err != nil {
+		return fmt.Errorf("could not activate: %s", err)
+	}
+	err = m.Continue()
+	if err != nil {
+		return fmt.Errorf("could not activate: %s", err)
+	}
+	err = m.AwaitSignal()
+	if err != nil {
+		return fmt.Errorf("could not activate: %s", err)
+	}
+	err = m.SendEnableSignal()
+	if err != nil {
+		return fmt.Errorf("could not activate: %s", err)
+	}
+	err = m.TakeCheckpoint()
+	if err != nil {
+		return fmt.Errorf("could not take activation checkpoint: %s", err)
+	}
+
+	return nil
+}
+
+func (m *Worker) TakeCheckpoint() error {
+	pid := int(m.task.Pid())
+
+	var waitStat syscall.WaitStatus
+	for waitStat.StopSignal() != syscall.SIGUSR2 {
+		_, err := syscall.Wait4(pid, &waitStat, 0, nil)
+		if err != nil {
+			return err
+		}
+
+		m.stopped = true
+		state, err := m.GetState()
+		if err != nil {
+			return err
+		}
+		m.checkpoints = append(m.checkpoints, state)
+
+		m.stopped = false
+		err = syscall.PtraceCont(int(pid), int(waitStat.StopSignal()))
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (m *Worker) GetCheckpoints() []*State {
+	return m.checkpoints
+}
+
+func (m *Worker) SendFunction(function string) error {
+	udpAddr := net.TCPAddr{
 		IP:   m.IP,
 		Port: 5000,
 	}
 
-	conn, err := net.DialUDP("udp", nil, &udpAddr)
+	functionReq := &LoadFunctionReq{Handler: function}
+	functionReqString, err := json.Marshal(functionReq)
+	if err != nil {
+		return fmt.Errorf("could not marshal function: %s, %s", function, err)
+	}
+
+	conn, err := net.DialTCP("tcp", nil, &udpAddr)
 	if err != nil {
 		return fmt.Errorf("could not dial worker: %s", err)
 	}
 	defer conn.Close()
 
-	writeBytes := []byte("hello there!\n")
-	_, err = conn.Write(writeBytes)
+	_, err = conn.Write(functionReqString)
 	if err != nil {
 		return fmt.Errorf("could not write to worker: %s", err)
 	}
 
-	result := make([]byte, len(writeBytes))
-	_, err = conn.Read(result)
-	if err != nil {
-		return fmt.Errorf("could not read from worker: %s", err)
+	return nil
+}
+
+func (m *Worker) SendRequest(request string) error {
+	udpAddr := net.TCPAddr{
+		IP:   m.IP,
+		Port: 5000,
 	}
 
-	if len(result) != len(writeBytes) {
-		return fmt.Errorf("worker did not echo: %s", string(result))
+	conn, err := net.DialTCP("tcp", nil, &udpAddr)
+	if err != nil {
+		return fmt.Errorf("could not dial worker: %s", err)
+	}
+	defer conn.Close()
+
+	_, err = conn.Write([]byte(request))
+	if err != nil {
+		return fmt.Errorf("could not write to worker: %s", err)
 	}
 
 	return nil
@@ -372,7 +449,11 @@ func (m *Worker) PrintRegs() error {
 }
 
 func (m *Worker) End() error {
+	var detachErr error
 	if m.task != nil {
+		if m.attached {
+			detachErr = m.Detach()
+		}
 		if err := m.task.Kill(m.ctx, syscall.SIGKILL); err != nil {
 			if errdefs.IsFailedPrecondition(err) || errdefs.IsNotFound(err) {
 				return nil
@@ -390,6 +471,10 @@ func (m *Worker) End() error {
 
 	if m.container != nil {
 		m.container.Delete(m.ctx, containerd.WithSnapshotCleanup)
+	}
+
+	if detachErr != nil {
+		return fmt.Errorf("could not detach on end: %s", detachErr)
 	}
 
 	return nil
