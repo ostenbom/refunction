@@ -46,24 +46,13 @@ var _ = Describe("Worker Restoring", func() {
 
 			It("can restore dirty stack pages", func() {
 				countLocation := getRootfs(worker) + "count.txt"
-
-				Eventually(func() bool {
-					_, err := os.Stat(countLocation)
-					return os.IsNotExist(err)
-				}).Should(BeFalse())
+				WaitFileExists(countLocation)
 
 				Expect(worker.Attach()).To(Succeed())
 				defer worker.Detach()
 
 				// Work out what will be printed next
-				countContent, err := ioutil.ReadFile(countLocation)
-				Expect(err).NotTo(HaveOccurred())
-				lines := strings.Split(string(countContent), "\n")
-				lastLine := lines[len(lines)-2]
-				lastLineItems := strings.Split(lastLine, " ")
-				number, err := strconv.Atoi(lastLineItems[len(lastLineItems)-1])
-				Expect(err).NotTo(HaveOccurred())
-				incrementedLine := fmt.Sprintf("at: %d", number+1)
+				incrementedLine := CalculateNextCountLine(countLocation)
 
 				// Get first state
 				state, err := worker.GetState()
@@ -82,7 +71,7 @@ var _ = Describe("Worker Restoring", func() {
 				// Let run, check variable was restored
 				time.Sleep(time.Millisecond * 60)
 				Expect(worker.Stop()).To(Succeed())
-				countContent, err = ioutil.ReadFile(countLocation)
+				countContent, err := ioutil.ReadFile(countLocation)
 				Expect(err).NotTo(HaveOccurred())
 				numberPrintedIncrements := strings.Count(string(countContent), incrementedLine)
 				Expect(numberPrintedIncrements).To(Equal(2))
@@ -97,24 +86,13 @@ var _ = Describe("Worker Restoring", func() {
 
 			It("can restore variable in a register", func() {
 				countLocation := getRootfs(worker) + "count.txt"
-
-				Eventually(func() bool {
-					_, err := os.Stat(countLocation)
-					return os.IsNotExist(err)
-				}).Should(BeFalse())
+				WaitFileExists(countLocation)
 
 				Expect(worker.Attach()).To(Succeed())
 				defer worker.Detach()
 
 				// Work out what will be printed next
-				countContent, err := ioutil.ReadFile(countLocation)
-				Expect(err).NotTo(HaveOccurred())
-				lines := strings.Split(string(countContent), "\n")
-				lastLine := lines[len(lines)-2]
-				lastLineItems := strings.Split(lastLine, " ")
-				number, err := strconv.Atoi(lastLineItems[len(lastLineItems)-1])
-				Expect(err).NotTo(HaveOccurred())
-				incrementedLine := fmt.Sprintf("at: %d", number+1)
+				incrementedLine := CalculateNextCountLine(countLocation)
 
 				// Get first state
 				state, err := worker.GetState()
@@ -129,7 +107,7 @@ var _ = Describe("Worker Restoring", func() {
 				// Let run, check variable was restored
 				time.Sleep(time.Millisecond * 60)
 				Expect(worker.Stop()).To(Succeed())
-				countContent, err = ioutil.ReadFile(countLocation)
+				countContent, err := ioutil.ReadFile(countLocation)
 				Expect(err).NotTo(HaveOccurred())
 				numberPrintedIncrements := strings.Count(string(countContent), incrementedLine)
 				Expect(numberPrintedIncrements).To(Equal(2))
@@ -151,24 +129,13 @@ var _ = Describe("Worker Restoring", func() {
 				Expect(worker.SendEnableSignal()).To(Succeed())
 
 				countLocation := getRootfs(worker) + "/tmp/count.txt"
-
-				Eventually(func() bool {
-					_, err := os.Stat(countLocation)
-					return os.IsNotExist(err)
-				}).Should(BeFalse())
+				WaitFileExists(countLocation)
 
 				time.Sleep(time.Millisecond * 50)
 				Expect(worker.Stop()).To(Succeed())
 
 				// Work out what will be printed next
-				countContent, err := ioutil.ReadFile(countLocation)
-				Expect(err).NotTo(HaveOccurred())
-				lines := strings.Split(string(countContent), "\n")
-				lastLine := lines[len(lines)-2]
-				lastLineItems := strings.Split(lastLine, " ")
-				number, err := strconv.Atoi(lastLineItems[len(lastLineItems)-1])
-				Expect(err).NotTo(HaveOccurred())
-				incrementedLine := fmt.Sprintf("at: %d", number+1)
+				incrementedLine := CalculateNextCountLine(countLocation)
 
 				// Get first state
 				state, err := worker.GetState()
@@ -191,7 +158,7 @@ var _ = Describe("Worker Restoring", func() {
 				// Let run, check variable was restored
 				time.Sleep(time.Millisecond * 60)
 				Expect(worker.Stop()).To(Succeed())
-				countContent, err = ioutil.ReadFile(countLocation)
+				countContent, err := ioutil.ReadFile(countLocation)
 				Expect(err).NotTo(HaveOccurred())
 				numberPrintedIncrements := strings.Count(string(countContent), incrementedLine)
 				Expect(numberPrintedIncrements).To(Equal(2))
@@ -199,3 +166,21 @@ var _ = Describe("Worker Restoring", func() {
 		})
 	})
 })
+
+func WaitFileExists(location string) {
+	Eventually(func() bool {
+		_, err := os.Stat(location)
+		return os.IsNotExist(err)
+	}).Should(BeFalse())
+}
+
+func CalculateNextCountLine(countLocation string) string {
+	countContent, err := ioutil.ReadFile(countLocation)
+	Expect(err).NotTo(HaveOccurred())
+	lines := strings.Split(string(countContent), "\n")
+	lastLine := lines[len(lines)-2]
+	lastLineItems := strings.Split(lastLine, " ")
+	number, err := strconv.Atoi(lastLineItems[len(lastLineItems)-1])
+	Expect(err).NotTo(HaveOccurred())
+	return fmt.Sprintf("at: %d", number+1)
+}
