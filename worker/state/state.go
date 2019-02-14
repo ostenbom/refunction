@@ -44,3 +44,7 @@ func (s *State) RestoreRegs() error {
 	}
 	return nil
 }
+
+func (s *State) PC() uint64 {
+	return s.registers.PC()
+}

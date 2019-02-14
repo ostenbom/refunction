@@ -14,8 +14,9 @@ import (
 
 var _ = Describe("Python Serverless Function Management", func() {
 	var id string
-	targetLayer := "serverless-function.py"
 	runtime := "python"
+	var targetLayer string
+	var worker *Worker
 	var stdout *gbytes.Buffer
 	var stderr *gbytes.Buffer
 
@@ -23,23 +24,44 @@ var _ = Describe("Python Serverless Function Management", func() {
 		id = strconv.Itoa(GinkgoParallelNode())
 	})
 
-	Describe("state restoring", func() {
-		var worker *Worker
+	JustBeforeEach(func() {
+		var err error
+		worker, err = NewWorker(id, client, runtime, targetLayer)
+		Expect(err).NotTo(HaveOccurred())
+		stdout = gbytes.NewBuffer()
+		stderr = gbytes.NewBuffer()
+		worker.WithCreator(cio.NewCreator(cio.WithStreams(nil, io.MultiWriter(stdout, GinkgoWriter), io.MultiWriter(stderr, GinkgoWriter))))
 
-		JustBeforeEach(func() {
-			var err error
-			worker, err = NewWorker(id, client, runtime, targetLayer)
-			Expect(err).NotTo(HaveOccurred())
-			stdout = gbytes.NewBuffer()
-			stderr = gbytes.NewBuffer()
-			worker.WithCreator(cio.NewCreator(cio.WithStreams(nil, io.MultiWriter(stdout, GinkgoWriter), io.MultiWriter(stderr, GinkgoWriter))))
+		Expect(worker.Start()).To(Succeed())
+	})
 
-			Expect(worker.Start()).To(Succeed())
+	AfterEach(func() {
+		err := worker.End()
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	Describe("simple single function run", func() {
+		BeforeEach(func() {
+			targetLayer = "single-function.py"
 		})
 
-		AfterEach(func() {
-			err := worker.End()
-			Expect(err).NotTo(HaveOccurred())
+		It("can reset after done signal", func() {
+			Expect(worker.Activate()).To(Succeed())
+
+			Eventually(stdout).Should(gbytes.Say("handling request"))
+
+			Expect(worker.AwaitDone()).To(Succeed())
+			Expect(worker.Restore()).To(Succeed())
+			Expect(worker.Continue()).To(Succeed())
+
+			Eventually(stdout).Should(gbytes.Say("handling request"))
+		})
+	})
+
+	Describe("server managed function", func() {
+
+		BeforeEach(func() {
+			targetLayer = "serverless-function.py"
 		})
 
 		It("can load a function and send a request", func() {
@@ -59,7 +81,6 @@ var _ = Describe("Python Serverless Function Management", func() {
 		})
 
 		It("can get a request response", func() {
-			// Initiate python ready sequence
 			Expect(worker.Activate()).To(Succeed())
 
 			function := "def handle(req):\n  print(req)\n  return req"
@@ -70,5 +91,28 @@ var _ = Describe("Python Serverless Function Management", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(request).To(Equal(response))
 		})
+
+		It("can get several request responses", func() {
+			Expect(worker.Activate()).To(Succeed())
+
+			function := "def handle(req):\n  print(req)\n  return req"
+			Expect(worker.SendFunction(function)).To(Succeed())
+
+			request := "{\"greatkey\": \"nicevalue\"}"
+			response, err := worker.SendRequest(request)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(request).To(Equal(response))
+
+			request = "{\"greatkey2\": \"nicevalue\"}"
+			response, err = worker.SendRequest(request)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(request).To(Equal(response))
+
+			request = "{\"greatkey3\": \"nicevalue\"}"
+			response, err = worker.SendRequest(request)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(request).To(Equal(response))
+		})
+
 	})
 })

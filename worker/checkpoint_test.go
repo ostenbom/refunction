@@ -157,6 +157,15 @@ var _ = Describe("Worker Manager checkpointing", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(changed).To(BeFalse())
 			})
+
+			It("has a program counter", func() {
+				Expect(worker.Attach()).To(Succeed())
+				defer worker.Detach()
+
+				state, err := worker.GetState()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(state.PC()).NotTo(Equal(0))
+			})
 		})
 
 		Context("expanding heap", func() {

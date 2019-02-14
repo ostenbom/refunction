@@ -11,6 +11,7 @@ import (
 	"os"
 	"runtime"
 	"syscall"
+	"time"
 
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/cio"
@@ -190,6 +191,18 @@ func (m *Worker) TakeCheckpoint() error {
 		if err != nil {
 			return err
 		}
+		err = state.SavePages("[stack]")
+		if err != nil {
+			return err
+		}
+		err = state.SavePages("[heap]")
+		if err != nil {
+			return err
+		}
+		err = m.ClearMemRefs()
+		if err != nil {
+			return err
+		}
 		m.checkpoints = append(m.checkpoints, state)
 
 		m.stopped = false
@@ -257,6 +270,23 @@ func (m *Worker) SendRequest(request string) (string, error) {
 	return string(response), nil
 }
 
+func (m *Worker) AwaitDone() error {
+	pid := int(m.task.Pid())
+
+	var waitStat syscall.WaitStatus
+	_, err := syscall.Wait4(pid, &waitStat, 0, nil)
+	if err != nil {
+		return err
+	}
+	m.stopped = true
+
+	if waitStat.StopSignal() != syscall.SIGUSR1 {
+		return fmt.Errorf("worker child stopped for other reason")
+	}
+
+	return nil
+}
+
 func (m *Worker) AwaitSignal() error {
 	pid := int(m.task.Pid())
 
@@ -270,6 +300,48 @@ func (m *Worker) AwaitSignal() error {
 		err = syscall.PtraceCont(int(pid), int(waitStat.StopSignal()))
 		if err != nil {
 			return err
+		}
+	}
+
+	return nil
+}
+
+func (m *Worker) Restore() error {
+	stoppedByRestore := false
+	if !m.stopped {
+		stoppedByRestore = true
+		err := m.Stop()
+		if err != nil {
+			return fmt.Errorf("could not stop worker for restore: %s", err)
+		}
+	}
+
+	if len(m.checkpoints) <= 0 {
+		return fmt.Errorf("no checkpoints to restore")
+	}
+
+	state := m.checkpoints[0]
+
+	start := time.Now()
+
+	err := state.RestoreDirtyPages("[stack]")
+	if err != nil {
+		return fmt.Errorf("could not restore stack: %s", err)
+	}
+	err = state.RestoreDirtyPages("[heap]")
+	if err != nil {
+		return fmt.Errorf("could not restore heap: %s", err)
+	}
+	err = state.RestoreRegs()
+	if err != nil {
+		return fmt.Errorf("could not restore regs: %s", err)
+	}
+	fmt.Printf("restore time: %s\n", time.Since(start))
+
+	if stoppedByRestore {
+		err = m.Continue()
+		if err != nil {
+			return fmt.Errorf("could not continue after restore: %s", err)
 		}
 	}
 
