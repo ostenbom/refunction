@@ -1,12 +1,15 @@
 package worker_test
 
 import (
+	"io"
 	"io/ioutil"
 	"net"
 	"strconv"
 
+	"github.com/containerd/containerd/cio"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gbytes"
 
 	. "github.com/ostenbom/refunction/worker"
 )
@@ -17,6 +20,37 @@ var _ = Describe("Network", func() {
 
 	BeforeEach(func() {
 		id = strconv.Itoa(GinkgoParallelNode())
+	})
+
+	Describe("when reaching to external internet", func() {
+		var worker *Worker
+		var targetLayer string
+		var stdout *gbytes.Buffer
+		var stderr *gbytes.Buffer
+		runtime := "python"
+
+		JustBeforeEach(func() {
+			var err error
+			worker, err = NewWorker(id, client, runtime, targetLayer)
+			Expect(err).NotTo(HaveOccurred())
+			stdout = gbytes.NewBuffer()
+			stderr = gbytes.NewBuffer()
+			worker.WithCreator(cio.NewCreator(cio.WithStreams(nil, io.MultiWriter(stdout, GinkgoWriter), io.MultiWriter(stderr, GinkgoWriter))))
+			Expect(worker.Start()).To(Succeed())
+		})
+
+		AfterEach(func() {
+			err := worker.End()
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		BeforeEach(func() {
+			targetLayer = "ping-google.py"
+		})
+
+		It("can get a response", func() {
+			Eventually(stdout).Should(gbytes.Say("ttl="))
+		})
 	})
 
 	Describe("communicating with a container", func() {
