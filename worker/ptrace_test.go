@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"syscall"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -53,10 +54,10 @@ var _ = Describe("Worker Manager using python runtime", func() {
 			Expect(worker.Attach()).To(Succeed())
 			defer worker.Detach()
 			Expect(worker.Continue()).To(Succeed())
-			Expect(worker.AwaitSignal()).To(Succeed())
+			Expect(worker.AwaitSignal(syscall.SIGUSR2)).To(Succeed())
 
 			// Send custom "ready" signal to container
-			err := worker.SendEnableSignal()
+			err := worker.SendSignal(syscall.SIGUSR1)
 			Expect(err).NotTo(HaveOccurred())
 
 			countLocation := getRootfs(worker) + "tmp/count.txt"
@@ -96,9 +97,9 @@ var _ = Describe("Worker Manager using python runtime", func() {
 			Expect(worker.Attach()).To(Succeed())
 			defer worker.Detach()
 			Expect(worker.Continue()).To(Succeed())
-			Expect(worker.AwaitSignal()).To(Succeed())
+			Expect(worker.AwaitSignal(syscall.SIGUSR2)).To(Succeed())
 
-			err := worker.SendEnableSignal()
+			err := worker.SendSignal(syscall.SIGUSR1)
 			Expect(err).NotTo(HaveOccurred())
 
 			countLocation := getRootfs(worker) + "tmp/count.txt"
@@ -149,7 +150,7 @@ var _ = Describe("Worker Manager using c-sigusr-sleep image", func() {
 
 		It("creates the count file after SIGUSR1", func() {
 			// Send custom "ready" signal to container
-			err := worker.SendEnableSignal()
+			err := worker.SendSignal(syscall.SIGUSR1)
 			Expect(err).NotTo(HaveOccurred())
 
 			countLocation := getRootfs(worker) + "tmp/count.txt"
@@ -189,7 +190,7 @@ var _ = Describe("Worker Manager using c-sigusr-sleep image", func() {
 			defer worker.Detach()
 			Expect(worker.Continue()).To(Succeed())
 
-			err := worker.SendEnableSignal()
+			err := worker.SendSignal(syscall.SIGUSR1)
 			Expect(err).NotTo(HaveOccurred())
 
 			countLocation := getRootfs(worker) + "tmp/count.txt"
@@ -245,7 +246,7 @@ var _ = Describe("Worker Manager using go-ptrace-sleep image", func() {
 
 		It("creates the count file after SIGUSR1", func() {
 			// Send custom "ready" signal to container
-			err := manager.SendEnableSignal()
+			err := manager.SendSignal(syscall.SIGUSR1)
 			Expect(err).NotTo(HaveOccurred())
 
 			countLocation := getRootfs(manager) + "tmp/count.txt"

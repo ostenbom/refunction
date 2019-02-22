@@ -3,6 +3,7 @@ package worker_test
 import (
 	"io"
 	"strconv"
+	"syscall"
 
 	"github.com/containerd/containerd/cio"
 	. "github.com/onsi/ginkgo"
@@ -50,7 +51,7 @@ var _ = Describe("Python Serverless Function Management", func() {
 
 			Eventually(stdout).Should(gbytes.Say("handling request"))
 
-			Expect(worker.AwaitDone()).To(Succeed())
+			Expect(worker.PauseAtSignal(syscall.SIGUSR2)).To(Succeed())
 			Expect(worker.Restore()).To(Succeed())
 			Expect(worker.Continue()).To(Succeed())
 

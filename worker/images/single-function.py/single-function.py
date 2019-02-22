@@ -48,9 +48,9 @@ def handle(req):
     return req
 
 def alertDone():
-    os.kill(os.getpid(), signal.SIGUSR1)
+    os.kill(os.getpid(), signal.SIGUSR2)
 
 def alertCheckpoint():
-    os.kill(os.getpid(), signal.SIGUSR2)
+    os.kill(os.getpid(), signal.SIGUSR1)
 
 main()

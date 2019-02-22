@@ -23,6 +23,12 @@ import (
 	. "github.com/ostenbom/refunction/worker/state"
 )
 
+const RuntimeStartedSignal = syscall.SIGUSR2
+const ActivateChildSignal = syscall.SIGUSR1
+const CheckpointSignal = syscall.SIGUSR1
+const FinishServerSignal = syscall.SIGUSR2
+const ServerFinishedSignal = syscall.SIGUSR2
+
 func NewWorker(id string, client *containerd.Client, runtime, targetSnapshot string) (*Worker, error) {
 	ctx := namespaces.WithNamespace(context.Background(), "refunction-worker"+id)
 
@@ -154,19 +160,19 @@ func (m *Worker) Start() error {
 func (m *Worker) Activate() error {
 	err := m.Attach()
 	if err != nil {
-		return fmt.Errorf("could not activate: %s", err)
+		return fmt.Errorf("could not attach activate: %s", err)
 	}
 	err = m.Continue()
 	if err != nil {
-		return fmt.Errorf("could not activate: %s", err)
+		return fmt.Errorf("could not continue to activate: %s", err)
 	}
-	err = m.AwaitSignal()
+	err = m.AwaitSignal(RuntimeStartedSignal)
 	if err != nil {
-		return fmt.Errorf("could not activate: %s", err)
+		return fmt.Errorf("could not await runtime started in activate: %s", err)
 	}
-	err = m.SendEnableSignal()
+	err = m.SendSignal(ActivateChildSignal)
 	if err != nil {
-		return fmt.Errorf("could not activate: %s", err)
+		return fmt.Errorf("could not send activate signal: %s", err)
 	}
 	err = m.TakeCheckpoint()
 	if err != nil {
@@ -177,41 +183,34 @@ func (m *Worker) Activate() error {
 }
 
 func (m *Worker) TakeCheckpoint() error {
-	pid := int(m.task.Pid())
-
-	var waitStat syscall.WaitStatus
-	for waitStat.StopSignal() != syscall.SIGUSR2 {
-		_, err := syscall.Wait4(pid, &waitStat, 0, nil)
-		if err != nil {
-			return err
-		}
-
-		m.stopped = true
-		state, err := m.GetState()
-		if err != nil {
-			return err
-		}
-		err = state.SavePages("[stack]")
-		if err != nil {
-			return err
-		}
-		err = state.SavePages("[heap]")
-		if err != nil {
-			return err
-		}
-		err = m.ClearMemRefs()
-		if err != nil {
-			return err
-		}
-		m.checkpoints = append(m.checkpoints, state)
-
-		m.stopped = false
-		err = syscall.PtraceCont(int(pid), int(waitStat.StopSignal()))
-		if err != nil {
-			return err
-		}
+	err := m.PauseAtSignal(CheckpointSignal)
+	if err != nil {
+		return err
 	}
 
+	state, err := m.GetState()
+	if err != nil {
+		return err
+	}
+	err = state.SavePages("[stack]")
+	if err != nil {
+		return err
+	}
+	err = state.SavePages("[heap]")
+	if err != nil {
+		return err
+	}
+	err = m.ClearMemRefs()
+	if err != nil {
+		return err
+	}
+	m.checkpoints = append(m.checkpoints, state)
+
+	m.stopped = false
+	err = syscall.PtraceCont(int(m.task.Pid()), int(CheckpointSignal))
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -270,28 +269,13 @@ func (m *Worker) SendRequest(request string) (string, error) {
 	return string(response), nil
 }
 
-func (m *Worker) AwaitDone() error {
+// AwaitSignal lets the process continue until the desired signal is caught.
+// Allows the process to continue after the signal is caught
+func (m *Worker) AwaitSignal(waitingFor syscall.Signal) error {
 	pid := int(m.task.Pid())
 
 	var waitStat syscall.WaitStatus
-	_, err := syscall.Wait4(pid, &waitStat, 0, nil)
-	if err != nil {
-		return err
-	}
-	m.stopped = true
-
-	if waitStat.StopSignal() != syscall.SIGUSR1 {
-		return fmt.Errorf("worker child stopped for other reason")
-	}
-
-	return nil
-}
-
-func (m *Worker) AwaitSignal() error {
-	pid := int(m.task.Pid())
-
-	var waitStat syscall.WaitStatus
-	for waitStat.StopSignal() != syscall.SIGUSR2 {
+	for waitStat.StopSignal() != waitingFor {
 		_, err := syscall.Wait4(pid, &waitStat, 0, nil)
 		if err != nil {
 			return err
@@ -303,6 +287,33 @@ func (m *Worker) AwaitSignal() error {
 		}
 	}
 
+	return nil
+}
+
+// PauseAtSignal waits until the desired signal is caught and returns
+// before continuing
+func (m *Worker) PauseAtSignal(waitingFor syscall.Signal) error {
+	pid := int(m.task.Pid())
+
+	var waitStat syscall.WaitStatus
+	_, err := syscall.Wait4(pid, &waitStat, 0, nil)
+	if err != nil {
+		return err
+	}
+
+	for waitStat.StopSignal() != waitingFor {
+		err = syscall.PtraceCont(int(pid), int(waitStat.StopSignal()))
+		if err != nil {
+			return err
+		}
+
+		_, err := syscall.Wait4(pid, &waitStat, 0, nil)
+		if err != nil {
+			return err
+		}
+	}
+
+	m.stopped = true
 	return nil
 }
 
@@ -399,10 +410,15 @@ func (m *Worker) Continue() error {
 	return syscall.PtraceCont(int(m.task.Pid()), 0)
 }
 
-func (m *Worker) SendEnableSignal() error {
+func (m *Worker) ContinueWith(signal syscall.Signal) error {
+	m.stopped = false
+	return syscall.PtraceCont(int(m.task.Pid()), int(signal))
+}
+
+func (m *Worker) SendSignal(signal syscall.Signal) error {
 	pid := int(m.task.Pid())
 
-	err := syscall.Kill(pid, syscall.SIGUSR1)
+	err := syscall.Kill(pid, signal)
 	if err != nil {
 		return err
 	}

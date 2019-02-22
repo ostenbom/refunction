@@ -3,6 +3,7 @@ start_time = time.time()
 import os
 import json
 import signal
+import select
 import socket
 import importlib
 
@@ -22,6 +23,11 @@ def activate(signum, frame):
 def nothing(signum, frame):
     pass
 
+finished = False
+def finish(signum, frame):
+    global finished
+    finished = True
+
 signal.signal(signal.SIGUSR1, activate)
 signal.signal(signal.SIGUSR2, nothing)
 
@@ -32,35 +38,43 @@ while not activated:
     time.sleep(0.01)
 
 signal.signal(signal.SIGUSR1, nothing)
-signal.signal(signal.SIGUSR2, nothing)
+signal.signal(signal.SIGUSR2, finish)
 print("activated", flush=True)
 # At this point the container is traced and ready to go.
 
 def main():
     alertCheckpoint()
+    print("checkpoint taken", flush=True)
 
     functionLoaded = False
 
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     s.bind(('', HOSTPORT))
     s.listen()
     while not functionLoaded:
         print("loading function", flush=True)
         functionLoaded = loadFunction(s)
 
-
     print("starting function server", flush=True)
     startFunctionServer(s)
     s.close()
+    alertDone()
 
-def alertDone():
-    os.kill(os.getpid(), signal.SIGUSR1)
+    while True:
+        pass
 
 def alertCheckpoint():
+    os.kill(os.getpid(), signal.SIGUSR1)
+
+def alertDone():
+    print("alerting done", flush=True)
     os.kill(os.getpid(), signal.SIGUSR2)
 
 def loadFunction(s):
+    print("getting function json", flush=True)
     function = getFunctionJson(s)
+    print("got function json", flush=True)
 
     if "imports" in function:
         print("requested to import", function["imports"], flush=True)
@@ -69,39 +83,42 @@ def loadFunction(s):
         print("no handler from function", flush=True)
         return False
 
+    print("loading handle function", flush=True)
     global handle
     exec(function["handler"], globals())
     return True
 
 def startFunctionServer(s):
-    while True:
-        conn, addr = s.accept()
-        request = ''
-        try:
-            request = decodeSocketJson(conn)
-        except ValueError as e:
-            print("could not get request from socket", e, flush=True)
-            conn.close()
-            continue
+    while not finished:
+        readready, _, _ = select.select([s], [], [], 0.01)
+        if len(readready):
+          conn, addr = s.accept()
+          request = ''
+          try:
+              request = decodeSocketJson(conn)
+          except ValueError as e:
+              print("could not get request from socket", e, flush=True)
+              conn.close()
+              continue
 
-        print("received request:", request, flush=True)
-        response = handle(request)
+          print("received request:", request, flush=True)
+          response = handle(request)
 
-        response_string = ''
-        try:
-            response_string = json.dumps(response)
-        except ValueError as e:
-            print("could not dump response to json", e, response, flush=True)
-            conn.close()
-            continue
+          response_string = ''
+          try:
+              response_string = json.dumps(response)
+          except ValueError as e:
+              print("could not dump response to json", e, response, flush=True)
+              conn.close()
+              continue
 
-        print("sending response:", response_string, flush=True)
-        conn.send(response_string.encode("utf-8"))
-        try:
-            conn.shutdown(socket.SHUT_RDWR)
-        except OSError as e:
-            pass
-        conn.close()
+          print("sending response:", response_string, flush=True)
+          conn.send(response_string.encode("utf-8"))
+          try:
+              conn.shutdown(socket.SHUT_RDWR)
+          except OSError as e:
+              pass
+          conn.close()
 
 def getFunctionJson(s):
     print("waiting function json", flush=True)

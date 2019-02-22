@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -125,8 +126,8 @@ var _ = Describe("Worker Restoring", func() {
 				Expect(worker.Attach()).To(Succeed())
 				defer worker.Detach()
 				Expect(worker.Continue()).To(Succeed())
-				Expect(worker.AwaitSignal()).To(Succeed())
-				Expect(worker.SendEnableSignal()).To(Succeed())
+				Expect(worker.AwaitSignal(syscall.SIGUSR2)).To(Succeed())
+				Expect(worker.SendSignal(syscall.SIGUSR1)).To(Succeed())
 
 				countLocation := getRootfs(worker) + "/tmp/count.txt"
 				WaitFileExists(countLocation)
