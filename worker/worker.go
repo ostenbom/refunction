@@ -188,10 +188,13 @@ func (m *Worker) TakeCheckpoint() error {
 		return err
 	}
 
+	checkStart := time.Now()
+
 	state, err := m.GetState()
 	if err != nil {
 		return err
 	}
+
 	err = state.SavePages("[stack]")
 	if err != nil {
 		return err
@@ -205,6 +208,8 @@ func (m *Worker) TakeCheckpoint() error {
 		return err
 	}
 	m.checkpoints = append(m.checkpoints, state)
+
+	fmt.Printf("checkpoint time: %s", time.Since(checkStart))
 
 	m.stopped = false
 	err = syscall.PtraceCont(int(m.task.Pid()), int(CheckpointSignal))
@@ -347,7 +352,7 @@ func (m *Worker) Restore() error {
 	if err != nil {
 		return fmt.Errorf("could not restore regs: %s", err)
 	}
-	fmt.Printf("restore time: %s\n", time.Since(start))
+	fmt.Printf("restore time: %s", time.Since(start))
 
 	if stoppedByRestore {
 		err = m.Continue()

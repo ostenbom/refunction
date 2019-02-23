@@ -9,10 +9,6 @@ import importlib
 
 HOSTPORT = 5000
 
-prevMask = signal.pthread_sigmask(signal.SIG_BLOCK, [])
-block = set(signal.Signals) - {signal.SIGUSR1, signal.SIGUSR2}
-signal.pthread_sigmask(signal.SIG_BLOCK, list(block))
-
 activated = False
 def activate(signum, frame):
     global activated
@@ -27,6 +23,10 @@ finished = False
 def finish(signum, frame):
     global finished
     finished = True
+
+prevMask = signal.pthread_sigmask(signal.SIG_BLOCK, [])
+block = set(signal.Signals) - {signal.SIGUSR1, signal.SIGUSR2}
+signal.pthread_sigmask(signal.SIG_BLOCK, list(block))
 
 signal.signal(signal.SIGUSR1, activate)
 signal.signal(signal.SIGUSR2, nothing)
@@ -53,7 +53,7 @@ def main():
     s.bind(('', HOSTPORT))
     s.listen()
     while not functionLoaded:
-        print("loading function", flush=True)
+        print("loading function", id(loadFunction), id(s), flush=True)
         functionLoaded = loadFunction(s)
 
     print("starting function server", flush=True)
@@ -72,7 +72,7 @@ def alertDone():
     os.kill(os.getpid(), signal.SIGUSR2)
 
 def loadFunction(s):
-    print("getting function json", flush=True)
+    print("getting function json", id(getFunctionJson), id(s), flush=True)
     function = getFunctionJson(s)
     print("got function json", flush=True)
 
@@ -121,7 +121,7 @@ def startFunctionServer(s):
           conn.close()
 
 def getFunctionJson(s):
-    print("waiting function json", flush=True)
+    print("waiting function json", id(s), flush=True)
     conn, addr = s.accept()
     print("accepting function json", flush=True)
     function_json = decodeSocketJson(conn)
