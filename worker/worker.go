@@ -36,6 +36,7 @@ const (
 	SignalStop
 	SyscallStop
 	EventStop
+	Exited
 	// SeccompStop
 )
 
@@ -45,6 +46,7 @@ func (state ChildState) String() string {
 		"SignalStop",
 		"SyscallStop",
 		"EventStop",
+		"Exited",
 	}
 
 	return names[state]
@@ -256,12 +258,7 @@ func (m *Worker) TakeCheckpoint() error {
 
 	fmt.Printf("checkpoint time: %s", time.Since(checkStart))
 
-	m.state = Running
-	err = syscall.PtraceCont(int(m.task.Pid()), int(CheckpointSignal))
-	if err != nil {
-		return err
-	}
-	return nil
+	return m.ContinueWith(CheckpointSignal)
 }
 
 func (m *Worker) GetCheckpoints() []*State {
@@ -322,16 +319,12 @@ func (m *Worker) SendRequest(request string) (string, error) {
 // AwaitSignal lets the process continue until the desired signal is caught.
 // Allows the process to continue after the signal is caught
 func (m *Worker) AwaitSignal(waitingFor syscall.Signal) error {
-	pid := int(m.task.Pid())
 
 	var waitStat syscall.WaitStatus
 	for waitStat.StopSignal() != waitingFor {
-		_, err := syscall.Wait4(pid, &waitStat, 0, nil)
-		if err != nil {
-			return err
-		}
+		waitStat = <-m.waitChannels.SignalStop
 
-		err = syscall.PtraceCont(int(pid), int(waitStat.StopSignal()))
+		err := m.ContinueWith(waitStat.StopSignal())
 		if err != nil {
 			return err
 		}
@@ -343,27 +336,18 @@ func (m *Worker) AwaitSignal(waitingFor syscall.Signal) error {
 // PauseAtSignal waits until the desired signal is caught and returns
 // before continuing
 func (m *Worker) PauseAtSignal(waitingFor syscall.Signal) error {
-	pid := int(m.task.Pid())
-
 	var waitStat syscall.WaitStatus
-	_, err := syscall.Wait4(pid, &waitStat, 0, nil)
-	if err != nil {
-		return err
-	}
+	waitStat = <-m.waitChannels.SignalStop
 
 	for waitStat.StopSignal() != waitingFor {
-		err = syscall.PtraceCont(int(pid), int(waitStat.StopSignal()))
+		err := m.ContinueWith(waitStat.StopSignal())
 		if err != nil {
 			return err
 		}
 
-		_, err := syscall.Wait4(pid, &waitStat, 0, nil)
-		if err != nil {
-			return err
-		}
+		waitStat = <-m.waitChannels.SignalStop
 	}
 
-	m.state = SignalStop
 	return nil
 }
 
@@ -433,7 +417,41 @@ func (m *Worker) Attach() error {
 		}
 	}
 
+	m.beginWaitLoop()
+
 	return nil
+}
+
+func (m *Worker) beginWaitLoop() {
+	go func() {
+		var waitStat syscall.WaitStatus
+		for m.state != Exited {
+			_, err := syscall.Wait4(int(m.task.Pid()), &waitStat, 0, nil)
+			if err != nil {
+				if waitStat.Exited() {
+					break
+				}
+
+				fmt.Printf("error in waiting for child loop: %s", err)
+				// Alternative to panic, better to end the worker at this point
+				m.End()
+			}
+
+			if !waitStat.Stopped() {
+				fmt.Println("did not wait for a stopped signal!")
+				continue
+			}
+
+			if waitStat.StopSignal() == syscall.SIGTRAP {
+				fmt.Printf("it was a trap signal, so syscall or event: %d", waitStat)
+				fmt.Printf("trap cause gives me: %d", waitStat.TrapCause())
+				fmt.Printf("compared as per man7: %t", waitStat.TrapCause() == int(syscall.SIGTRAP|0x80))
+			} else {
+				m.state = SignalStop
+				m.waitChannels.SignalStop <- waitStat
+			}
+		}
+	}()
 }
 
 func (m *Worker) Detach() error {
@@ -461,14 +479,12 @@ func (m *Worker) Stop() error {
 		return err
 	}
 
-	_, err = syscall.Wait4(int(m.task.Pid()), nil, 0, nil)
-	m.state = SignalStop
+	<-m.waitChannels.SignalStop
 	return err
 }
 
 func (m *Worker) Continue() error {
-	m.state = Running
-	return syscall.PtraceCont(int(m.task.Pid()), 0)
+	return m.ContinueWith(0)
 }
 
 func (m *Worker) ContinueWith(signal syscall.Signal) error {
@@ -490,15 +506,9 @@ func (m *Worker) SendSignal(signal syscall.Signal) error {
 	}
 
 	var waitStat syscall.WaitStatus
-	_, err = syscall.Wait4(int(pid), &waitStat, 0, nil)
-	if err != nil {
-		return err
-	}
-	if !waitStat.Stopped() {
-		return errors.New("child not stopped after signal")
-	}
+	waitStat = <-m.waitChannels.SignalStop
 
-	return syscall.PtraceCont(int(pid), int(waitStat.StopSignal()))
+	return m.ContinueWith(waitStat.StopSignal())
 }
 
 func (m *Worker) GetState() (*State, error) {
@@ -616,6 +626,7 @@ func (m *Worker) End() error {
 		}
 
 		<-m.taskExitChan
+		m.state = Exited
 
 		_, err := m.task.Delete(m.ctx)
 		if err != nil {
