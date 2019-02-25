@@ -29,6 +29,37 @@ const CheckpointSignal = syscall.SIGUSR1
 const FinishServerSignal = syscall.SIGUSR2
 const ServerFinishedSignal = syscall.SIGUSR2
 
+type ChildState int
+
+const (
+	Running ChildState = iota + 1
+	SignalStop
+	SyscallStop
+	EventStop
+	// SeccompStop
+)
+
+func (state ChildState) String() string {
+	names := []string{
+		"Running",
+		"SignalStop",
+		"SyscallStop",
+		"EventStop",
+	}
+
+	return names[state]
+}
+
+func (state ChildState) IsStopped() bool {
+	return state != Running
+}
+
+type WaitChannels struct {
+	SignalStop  chan syscall.WaitStatus
+	SyscallStop chan syscall.WaitStatus
+	EventStop   chan syscall.WaitStatus
+}
+
 func NewWorker(id string, client *containerd.Client, runtime, targetSnapshot string) (*Worker, error) {
 	ctx := namespaces.WithNamespace(context.Background(), "refunction-worker"+id)
 
@@ -45,6 +76,12 @@ func NewWorker(id string, client *containerd.Client, runtime, targetSnapshot str
 		ctx:            ctx,
 		creator:        cio.NullIO,
 		snapManager:    snapManager,
+		waitChannels: WaitChannels{
+			SignalStop:  make(chan syscall.WaitStatus),
+			SyscallStop: make(chan syscall.WaitStatus),
+			EventStop:   make(chan syscall.WaitStatus),
+		},
+		straceEnabled: false,
 	}, nil
 }
 
@@ -62,7 +99,10 @@ type Worker struct {
 	taskExitChan   <-chan containerd.ExitStatus
 	checkpoints    []*State
 	attached       bool
-	stopped        bool
+	attachOptions  []int
+	state          ChildState
+	waitChannels   WaitChannels
+	straceEnabled  bool
 	IP             net.IP
 }
 
@@ -72,6 +112,11 @@ type LoadFunctionReq struct {
 
 func (m *Worker) WithCreator(creator cio.Creator) {
 	m.creator = creator
+}
+
+func (m *Worker) WithSyscallTrace() {
+	m.straceEnabled = true
+	m.attachOptions = append(m.attachOptions, syscall.PTRACE_O_TRACESYSGOOD)
 }
 
 func WithNetNsHook(ipFile string) oci.SpecOpts {
@@ -152,7 +197,7 @@ func (m *Worker) Start() error {
 	m.IP = net.ParseIP(string(ipBytes))
 
 	m.attached = false
-	m.stopped = false
+	m.state = Running
 
 	return nil
 }
@@ -211,7 +256,7 @@ func (m *Worker) TakeCheckpoint() error {
 
 	fmt.Printf("checkpoint time: %s", time.Since(checkStart))
 
-	m.stopped = false
+	m.state = Running
 	err = syscall.PtraceCont(int(m.task.Pid()), int(CheckpointSignal))
 	if err != nil {
 		return err
@@ -318,13 +363,13 @@ func (m *Worker) PauseAtSignal(waitingFor syscall.Signal) error {
 		}
 	}
 
-	m.stopped = true
+	m.state = SignalStop
 	return nil
 }
 
 func (m *Worker) Restore() error {
 	stoppedByRestore := false
-	if !m.stopped {
+	if !m.state.IsStopped() {
 		stoppedByRestore = true
 		err := m.Stop()
 		if err != nil {
@@ -374,14 +419,25 @@ func (m *Worker) Attach() error {
 	}
 
 	m.attached = true
-	m.stopped = true
+	m.state = SignalStop
 
 	_, err = syscall.Wait4(int(m.task.Pid()), nil, 0, nil)
-	return err
+	if err != nil {
+		return err
+	}
+
+	for _, opt := range m.attachOptions {
+		err := syscall.PtraceSetOptions(int(m.task.Pid()), opt)
+		if err != nil {
+			return fmt.Errorf("could not set ptrace option on attach: %s", err)
+		}
+	}
+
+	return nil
 }
 
 func (m *Worker) Detach() error {
-	if !m.stopped {
+	if !m.state.IsStopped() {
 		err := m.Stop()
 		if err != nil {
 			return fmt.Errorf("could not stop child for detach: %s", err)
@@ -394,7 +450,7 @@ func (m *Worker) Detach() error {
 	}
 
 	m.attached = false
-	m.stopped = false
+	m.state = Running
 	runtime.UnlockOSThread()
 	return nil
 }
@@ -406,17 +462,17 @@ func (m *Worker) Stop() error {
 	}
 
 	_, err = syscall.Wait4(int(m.task.Pid()), nil, 0, nil)
-	m.stopped = true
+	m.state = SignalStop
 	return err
 }
 
 func (m *Worker) Continue() error {
-	m.stopped = false
+	m.state = Running
 	return syscall.PtraceCont(int(m.task.Pid()), 0)
 }
 
 func (m *Worker) ContinueWith(signal syscall.Signal) error {
-	m.stopped = false
+	m.state = Running
 	return syscall.PtraceCont(int(m.task.Pid()), int(signal))
 }
 
@@ -446,7 +502,7 @@ func (m *Worker) SendSignal(signal syscall.Signal) error {
 }
 
 func (m *Worker) GetState() (*State, error) {
-	if !m.stopped {
+	if !m.state.IsStopped() {
 		err := m.Stop()
 		if err != nil {
 			return nil, fmt.Errorf("could not stop child to get state: %s", err)
@@ -463,7 +519,7 @@ func (m *Worker) GetState() (*State, error) {
 }
 
 func (m *Worker) SetRegs(state *State) error {
-	if !m.stopped {
+	if !m.state.IsStopped() {
 		err := m.Stop()
 		if err != nil {
 			return fmt.Errorf("could not stop child to set regs: %s", err)
