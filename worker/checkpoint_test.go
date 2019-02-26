@@ -61,7 +61,7 @@ var _ = Describe("Worker Manager checkpointing", func() {
 			It("knows when the heap has been modified", func() {
 				Expect(worker.Attach()).To(Succeed())
 				Expect(worker.ClearMemRefs()).To(Succeed())
-				Expect(worker.Continue()).To(Succeed())
+				worker.Continue()
 
 				// mallocs every 50ms
 				time.Sleep(time.Millisecond * 60)
@@ -87,7 +87,7 @@ var _ = Describe("Worker Manager checkpointing", func() {
 			It("can notice a variable change the stack", func() {
 				Expect(worker.Attach()).To(Succeed())
 				Expect(worker.ClearMemRefs()).To(Succeed())
-				Expect(worker.Continue()).To(Succeed())
+				worker.Continue()
 
 				// loop ticks every 50ms
 				time.Sleep(time.Millisecond * 60)
@@ -123,7 +123,7 @@ var _ = Describe("Worker Manager checkpointing", func() {
 
 				state, err := worker.GetState()
 				Expect(err).NotTo(HaveOccurred())
-				Expect(worker.Continue()).To(Succeed())
+				worker.Continue()
 
 				time.Sleep(time.Millisecond * 100)
 				Expect(worker.Stop()).To(Succeed())
@@ -138,7 +138,7 @@ var _ = Describe("Worker Manager checkpointing", func() {
 
 				state, err := worker.GetState()
 				Expect(err).NotTo(HaveOccurred())
-				Expect(worker.Continue()).To(Succeed())
+				worker.Continue()
 
 				Expect(len(state.GetFileDescriptors())).To(Equal(3))
 			})
@@ -149,7 +149,7 @@ var _ = Describe("Worker Manager checkpointing", func() {
 
 				state, err := worker.GetState()
 				Expect(err).NotTo(HaveOccurred())
-				Expect(worker.Continue()).To(Succeed())
+				worker.Continue()
 
 				time.Sleep(time.Millisecond * 60)
 				Expect(worker.Stop()).To(Succeed())
@@ -179,7 +179,7 @@ var _ = Describe("Worker Manager checkpointing", func() {
 
 				state, err := worker.GetState()
 				Expect(err).NotTo(HaveOccurred())
-				Expect(worker.Continue()).To(Succeed())
+				worker.Continue()
 
 				time.Sleep(time.Millisecond * 100)
 				Expect(worker.Stop()).To(Succeed())
@@ -200,7 +200,7 @@ var _ = Describe("Worker Manager checkpointing", func() {
 
 				state, err := worker.GetState()
 				Expect(err).NotTo(HaveOccurred())
-				Expect(worker.Continue()).To(Succeed())
+				worker.Continue()
 
 				time.Sleep(time.Millisecond * 60)
 				Expect(worker.Stop()).To(Succeed())

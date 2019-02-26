@@ -53,8 +53,8 @@ var _ = Describe("Worker Manager using python runtime", func() {
 		It("creates the count file after SIGUSR1", func() {
 			Expect(worker.Attach()).To(Succeed())
 			defer worker.Detach()
-			Expect(worker.Continue()).To(Succeed())
-			Expect(worker.AwaitSignal(syscall.SIGUSR2)).To(Succeed())
+			worker.Continue()
+			worker.AwaitSignal(syscall.SIGUSR2)
 
 			// Send custom "ready" signal to container
 			err := worker.SendSignal(syscall.SIGUSR1)
@@ -96,8 +96,8 @@ var _ = Describe("Worker Manager using python runtime", func() {
 		It("creates a count file if allowed to continue, given SIGUSR1", func() {
 			Expect(worker.Attach()).To(Succeed())
 			defer worker.Detach()
-			Expect(worker.Continue()).To(Succeed())
-			Expect(worker.AwaitSignal(syscall.SIGUSR2)).To(Succeed())
+			worker.Continue()
+			worker.AwaitSignal(syscall.SIGUSR2)
 
 			err := worker.SendSignal(syscall.SIGUSR1)
 			Expect(err).NotTo(HaveOccurred())
@@ -188,7 +188,7 @@ var _ = Describe("Worker Manager using c-sigusr-sleep image", func() {
 		It("creates a count file if allowed to continue, given SIGUSR1", func() {
 			Expect(worker.Attach()).To(Succeed())
 			defer worker.Detach()
-			Expect(worker.Continue()).To(Succeed())
+			worker.Continue()
 
 			err := worker.SendSignal(syscall.SIGUSR1)
 			Expect(err).NotTo(HaveOccurred())

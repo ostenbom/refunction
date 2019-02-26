@@ -60,14 +60,14 @@ var _ = Describe("Worker Restoring", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(state.SavePages("[stack]")).To(Succeed())
 				Expect(worker.ClearMemRefs()).To(Succeed())
-				Expect(worker.Continue()).To(Succeed())
+				worker.Continue()
 
 				// Let run, restore
 				time.Sleep(time.Millisecond * 60)
 				Expect(worker.Stop()).To(Succeed())
 				err = state.RestoreDirtyPages("[stack]")
 				Expect(err).NotTo(HaveOccurred())
-				Expect(worker.Continue()).To(Succeed())
+				worker.Continue()
 
 				// Let run, check variable was restored
 				time.Sleep(time.Millisecond * 60)
@@ -98,7 +98,7 @@ var _ = Describe("Worker Restoring", func() {
 				// Get first state
 				state, err := worker.GetState()
 				Expect(err).NotTo(HaveOccurred())
-				Expect(worker.Continue()).To(Succeed())
+				worker.Continue()
 
 				// Let run, restore
 				time.Sleep(time.Millisecond * 60)
@@ -125,8 +125,8 @@ var _ = Describe("Worker Restoring", func() {
 				// Initiate python ready sequence
 				Expect(worker.Attach()).To(Succeed())
 				defer worker.Detach()
-				Expect(worker.Continue()).To(Succeed())
-				Expect(worker.AwaitSignal(syscall.SIGUSR2)).To(Succeed())
+				worker.Continue()
+				worker.AwaitSignal(syscall.SIGUSR2)
 				Expect(worker.SendSignal(syscall.SIGUSR1)).To(Succeed())
 
 				countLocation := getRootfs(worker) + "/tmp/count.txt"
@@ -144,7 +144,7 @@ var _ = Describe("Worker Restoring", func() {
 				Expect(state.SavePages("[stack]")).To(Succeed())
 				Expect(state.SavePages("[heap]")).To(Succeed())
 				Expect(worker.ClearMemRefs()).To(Succeed())
-				Expect(worker.Continue()).To(Succeed())
+				worker.Continue()
 
 				// Let run, restore
 				time.Sleep(time.Millisecond * 60)
@@ -154,7 +154,7 @@ var _ = Describe("Worker Restoring", func() {
 				Expect(state.RestoreDirtyPages("[heap]"))
 				Expect(state.RestoreRegs()).To(Succeed())
 				fmt.Printf("restore time: %s\n", time.Since(start))
-				Expect(worker.Continue()).To(Succeed())
+				worker.Continue()
 
 				// Let run, check variable was restored
 				time.Sleep(time.Millisecond * 60)

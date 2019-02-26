@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"math/rand"
 	"net"
 	"os"
-	"runtime"
 	"syscall"
 	"time"
 
@@ -29,37 +29,14 @@ const CheckpointSignal = syscall.SIGUSR1
 const FinishServerSignal = syscall.SIGUSR2
 const ServerFinishedSignal = syscall.SIGUSR2
 
-type ChildState int
-
-const (
-	Running ChildState = iota + 1
-	SignalStop
-	SyscallStop
-	EventStop
-	Exited
-	// SeccompStop
-)
-
-func (state ChildState) String() string {
-	names := []string{
-		"Running",
-		"SignalStop",
-		"SyscallStop",
-		"EventStop",
-		"Exited",
-	}
-
-	return names[state]
-}
-
-func (state ChildState) IsStopped() bool {
-	return state != Running
-}
-
-type WaitChannels struct {
-	SignalStop  chan syscall.WaitStatus
-	SyscallStop chan syscall.WaitStatus
-	EventStop   chan syscall.WaitStatus
+type PtraceChannels struct {
+	SignalStop     chan syscall.WaitStatus
+	Continue       chan syscall.Signal
+	HasContinued   chan int
+	Detach         chan int
+	HasDetached    chan int
+	InStopFunction chan func()
+	Error          chan error
 }
 
 func NewWorker(id string, client *containerd.Client, runtime, targetSnapshot string) (*Worker, error) {
@@ -78,10 +55,14 @@ func NewWorker(id string, client *containerd.Client, runtime, targetSnapshot str
 		ctx:            ctx,
 		creator:        cio.NullIO,
 		snapManager:    snapManager,
-		waitChannels: WaitChannels{
-			SignalStop:  make(chan syscall.WaitStatus),
-			SyscallStop: make(chan syscall.WaitStatus),
-			EventStop:   make(chan syscall.WaitStatus),
+		ptrace: PtraceChannels{
+			SignalStop:     make(chan syscall.WaitStatus, 1),
+			Continue:       make(chan syscall.Signal),
+			HasContinued:   make(chan int),
+			Detach:         make(chan int),
+			HasDetached:    make(chan int),
+			InStopFunction: make(chan func()),
+			Error:          make(chan error),
 		},
 		straceEnabled: false,
 	}, nil
@@ -102,9 +83,9 @@ type Worker struct {
 	checkpoints    []*State
 	attached       bool
 	attachOptions  []int
-	state          ChildState
-	waitChannels   WaitChannels
+	ptrace         PtraceChannels
 	straceEnabled  bool
+	straceOutput   io.Writer
 	IP             net.IP
 }
 
@@ -116,9 +97,10 @@ func (m *Worker) WithCreator(creator cio.Creator) {
 	m.creator = creator
 }
 
-func (m *Worker) WithSyscallTrace() {
+func (m *Worker) WithSyscallTrace(to io.Writer) {
 	m.straceEnabled = true
 	m.attachOptions = append(m.attachOptions, syscall.PTRACE_O_TRACESYSGOOD)
+	m.straceOutput = to
 }
 
 func WithNetNsHook(ipFile string) oci.SpecOpts {
@@ -196,28 +178,20 @@ func (m *Worker) Start() error {
 		return fmt.Errorf("could not read container ip file: %s", err)
 	}
 
+	// fmt.Println(string(ipBytes))
 	m.IP = net.ParseIP(string(ipBytes))
 
 	m.attached = false
-	m.state = Running
 
 	return nil
 }
 
 func (m *Worker) Activate() error {
-	err := m.Attach()
-	if err != nil {
-		return fmt.Errorf("could not attach activate: %s", err)
-	}
-	err = m.Continue()
-	if err != nil {
-		return fmt.Errorf("could not continue to activate: %s", err)
-	}
-	err = m.AwaitSignal(RuntimeStartedSignal)
-	if err != nil {
-		return fmt.Errorf("could not await runtime started in activate: %s", err)
-	}
-	err = m.SendSignal(ActivateChildSignal)
+	m.Attach()
+	m.Continue()
+	m.AwaitSignal(RuntimeStartedSignal)
+
+	err := m.SendSignal(ActivateChildSignal)
 	if err != nil {
 		return fmt.Errorf("could not send activate signal: %s", err)
 	}
@@ -230,10 +204,7 @@ func (m *Worker) Activate() error {
 }
 
 func (m *Worker) TakeCheckpoint() error {
-	err := m.PauseAtSignal(CheckpointSignal)
-	if err != nil {
-		return err
-	}
+	m.PauseAtSignal(CheckpointSignal)
 
 	checkStart := time.Now()
 
@@ -258,7 +229,8 @@ func (m *Worker) TakeCheckpoint() error {
 
 	fmt.Printf("checkpoint time: %s", time.Since(checkStart))
 
-	return m.ContinueWith(CheckpointSignal)
+	m.ContinueWith(CheckpointSignal)
+	return nil
 }
 
 func (m *Worker) GetCheckpoints() []*State {
@@ -318,43 +290,41 @@ func (m *Worker) SendRequest(request string) (string, error) {
 
 // AwaitSignal lets the process continue until the desired signal is caught.
 // Allows the process to continue after the signal is caught
-func (m *Worker) AwaitSignal(waitingFor syscall.Signal) error {
-
+func (m *Worker) AwaitSignal(waitingFor syscall.Signal) {
 	var waitStat syscall.WaitStatus
 	for waitStat.StopSignal() != waitingFor {
-		waitStat = <-m.waitChannels.SignalStop
-
-		err := m.ContinueWith(waitStat.StopSignal())
-		if err != nil {
-			return err
-		}
+		waitStat = <-m.ptrace.SignalStop
+		m.ContinueWith(waitStat.StopSignal())
 	}
 
-	return nil
+	return
 }
 
 // PauseAtSignal waits until the desired signal is caught and returns
 // before continuing
-func (m *Worker) PauseAtSignal(waitingFor syscall.Signal) error {
+func (m *Worker) PauseAtSignal(waitingFor syscall.Signal) {
 	var waitStat syscall.WaitStatus
-	waitStat = <-m.waitChannels.SignalStop
+	waitStat = <-m.ptrace.SignalStop
 
 	for waitStat.StopSignal() != waitingFor {
-		err := m.ContinueWith(waitStat.StopSignal())
-		if err != nil {
-			return err
-		}
-
-		waitStat = <-m.waitChannels.SignalStop
+		m.ContinueWith(waitStat.StopSignal())
+		waitStat = <-m.ptrace.SignalStop
 	}
 
-	return nil
+	m.ptrace.SignalStop <- waitStat
+	return
 }
 
 func (m *Worker) Restore() error {
-	stoppedByRestore := false
-	if !m.state.IsStopped() {
+	var stoppedByRestore bool
+	select {
+	case <-m.ptrace.SignalStop:
+		stoppedByRestore = false
+	default:
 		stoppedByRestore = true
+	}
+
+	if stoppedByRestore {
 		err := m.Stop()
 		if err != nil {
 			return fmt.Errorf("could not stop worker for restore: %s", err)
@@ -384,92 +354,28 @@ func (m *Worker) Restore() error {
 	fmt.Printf("restore time: %s", time.Since(start))
 
 	if stoppedByRestore {
-		err = m.Continue()
-		if err != nil {
-			return fmt.Errorf("could not continue after restore: %s", err)
-		}
+		m.Continue()
 	}
 
 	return nil
-}
-
-func (m *Worker) Attach() error {
-	// Crucial: trying to detach from a different thread
-	// than the attacher causes undefined behaviour
-	runtime.LockOSThread()
-	err := syscall.PtraceAttach(int(m.task.Pid()))
-	if err != nil {
-		return err
-	}
-
-	m.attached = true
-	m.state = SignalStop
-
-	_, err = syscall.Wait4(int(m.task.Pid()), nil, 0, nil)
-	if err != nil {
-		return err
-	}
-
-	for _, opt := range m.attachOptions {
-		err := syscall.PtraceSetOptions(int(m.task.Pid()), opt)
-		if err != nil {
-			return fmt.Errorf("could not set ptrace option on attach: %s", err)
-		}
-	}
-
-	m.beginWaitLoop()
-
-	return nil
-}
-
-func (m *Worker) beginWaitLoop() {
-	go func() {
-		var waitStat syscall.WaitStatus
-		for m.state != Exited {
-			_, err := syscall.Wait4(int(m.task.Pid()), &waitStat, 0, nil)
-			if err != nil {
-				if waitStat.Exited() {
-					break
-				}
-
-				fmt.Printf("error in waiting for child loop: %s", err)
-				// Alternative to panic, better to end the worker at this point
-				m.End()
-			}
-
-			if !waitStat.Stopped() {
-				fmt.Println("did not wait for a stopped signal!")
-				continue
-			}
-
-			if waitStat.StopSignal() == syscall.SIGTRAP {
-				fmt.Printf("it was a trap signal, so syscall or event: %d", waitStat)
-				fmt.Printf("trap cause gives me: %d", waitStat.TrapCause())
-				fmt.Printf("compared as per man7: %t", waitStat.TrapCause() == int(syscall.SIGTRAP|0x80))
-			} else {
-				m.state = SignalStop
-				m.waitChannels.SignalStop <- waitStat
-			}
-		}
-	}()
 }
 
 func (m *Worker) Detach() error {
-	if !m.state.IsStopped() {
-		err := m.Stop()
-		if err != nil {
-			return fmt.Errorf("could not stop child for detach: %s", err)
-		}
+	var err error
+	select {
+	case <-m.ptrace.SignalStop:
+		err = nil
+		break
+	default:
+		err = m.Stop()
 	}
-
-	err := syscall.PtraceDetach(int(m.task.Pid()))
 	if err != nil {
-		return err
+		return fmt.Errorf("could not stop child for detach: %s", err)
 	}
 
 	m.attached = false
-	m.state = Running
-	runtime.UnlockOSThread()
+	m.ptrace.Detach <- 1
+	<-m.ptrace.HasDetached
 	return nil
 }
 
@@ -479,17 +385,18 @@ func (m *Worker) Stop() error {
 		return err
 	}
 
-	<-m.waitChannels.SignalStop
+	stop := <-m.ptrace.SignalStop
+	m.ptrace.SignalStop <- stop
 	return err
 }
 
-func (m *Worker) Continue() error {
-	return m.ContinueWith(0)
+func (m *Worker) Continue() {
+	m.ContinueWith(0)
 }
 
-func (m *Worker) ContinueWith(signal syscall.Signal) error {
-	m.state = Running
-	return syscall.PtraceCont(int(m.task.Pid()), int(signal))
+func (m *Worker) ContinueWith(signal syscall.Signal) {
+	m.ptrace.Continue <- signal
+	<-m.ptrace.HasContinued
 }
 
 func (m *Worker) SendSignal(signal syscall.Signal) error {
@@ -505,14 +412,17 @@ func (m *Worker) SendSignal(signal syscall.Signal) error {
 		return nil
 	}
 
-	var waitStat syscall.WaitStatus
-	waitStat = <-m.waitChannels.SignalStop
-
-	return m.ContinueWith(waitStat.StopSignal())
+	<-m.ptrace.SignalStop
+	m.ContinueWith(signal)
+	return nil
 }
 
 func (m *Worker) GetState() (*State, error) {
-	if !m.state.IsStopped() {
+	select {
+	case wait := <-m.ptrace.SignalStop:
+		m.ptrace.SignalStop <- wait
+		break
+	default:
 		err := m.Stop()
 		if err != nil {
 			return nil, fmt.Errorf("could not stop child to get state: %s", err)
@@ -520,7 +430,7 @@ func (m *Worker) GetState() (*State, error) {
 		defer m.Continue()
 	}
 
-	state, err := NewState(int(m.task.Pid()))
+	state, err := NewState(int(m.task.Pid()), m.ptrace.InStopFunction)
 	if err != nil {
 		return nil, fmt.Errorf("could not get state: %s", err)
 	}
@@ -529,7 +439,11 @@ func (m *Worker) GetState() (*State, error) {
 }
 
 func (m *Worker) SetRegs(state *State) error {
-	if !m.state.IsStopped() {
+	select {
+	case wait := <-m.ptrace.SignalStop:
+		m.ptrace.SignalStop <- wait
+		break
+	default:
 		err := m.Stop()
 		if err != nil {
 			return fmt.Errorf("could not stop child to set regs: %s", err)
@@ -595,19 +509,20 @@ func (m *Worker) printProcFile(fileName string) error {
 }
 
 func (m *Worker) PrintRegs() error {
-	err := m.Stop()
-	if err != nil {
-		return fmt.Errorf("could not stop child for regs print: %s", err)
-	}
-	defer m.Continue()
-
-	var regs syscall.PtraceRegs
-	err = syscall.PtraceGetRegs(int(m.task.Pid()), &regs)
-	if err != nil {
-		return fmt.Errorf("could not get regs: %s", err)
-	}
-
-	fmt.Printf("Regs: %+v\n", regs)
+	// TODO
+	// err := m.Stop()
+	// if err != nil {
+	// 	return fmt.Errorf("could not stop child for regs print: %s", err)
+	// }
+	// defer m.Continue()
+	//
+	// var regs syscall.PtraceRegs
+	// err = syscall.PtraceGetRegs(int(m.task.Pid()), &regs)
+	// if err != nil {
+	// 	return fmt.Errorf("could not get regs: %s", err)
+	// }
+	//
+	// fmt.Printf("Regs: %+v\n", regs)
 
 	return nil
 }
@@ -626,7 +541,6 @@ func (m *Worker) End() error {
 		}
 
 		<-m.taskExitChan
-		m.state = Exited
 
 		_, err := m.task.Delete(m.ctx)
 		if err != nil {

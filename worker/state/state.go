@@ -10,12 +10,20 @@ type State struct {
 	registers       syscall.PtraceRegs
 	memoryLocations []*Memory
 	fileDescriptors []*FileDescriptor
+	stoppedFunction chan func()
 }
 
 //NewState caller must ensure process stopped before getting state
-func NewState(pid int) (*State, error) {
+func NewState(pid int, stoppedFunction chan func()) (*State, error) {
 	var state State
-	err := syscall.PtraceGetRegs(pid, &state.registers)
+
+	state.stoppedFunction = stoppedFunction
+	done := make(chan error)
+	stoppedFunction <- func() {
+		err := syscall.PtraceGetRegs(pid, &state.registers)
+		done <- err
+	}
+	err := <-done
 	if err != nil {
 		return nil, fmt.Errorf("could not get regs: %s", err)
 	}
@@ -38,7 +46,12 @@ func NewState(pid int) (*State, error) {
 }
 
 func (s *State) RestoreRegs() error {
-	err := syscall.PtraceSetRegs(s.pid, &s.registers)
+	done := make(chan error)
+	s.stoppedFunction <- func() {
+		err := syscall.PtraceSetRegs(s.pid, &s.registers)
+		done <- err
+	}
+	err := <-done
 	if err != nil {
 		return fmt.Errorf("could not set regs: %s", err)
 	}

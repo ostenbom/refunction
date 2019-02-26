@@ -51,9 +51,9 @@ var _ = Describe("Python Serverless Function Management", func() {
 
 			Eventually(stdout).Should(gbytes.Say("handling request"))
 
-			Expect(worker.PauseAtSignal(syscall.SIGUSR2)).To(Succeed())
+			worker.PauseAtSignal(syscall.SIGUSR2)
 			Expect(worker.Restore()).To(Succeed())
-			Expect(worker.Continue()).To(Succeed())
+			worker.Continue()
 
 			Eventually(stdout).Should(gbytes.Say("handling request"))
 		})
