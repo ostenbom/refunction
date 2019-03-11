@@ -10,6 +10,7 @@ type State struct {
 	registers       syscall.PtraceRegs
 	memoryLocations []*Memory
 	fileDescriptors []*FileDescriptor
+	rlimits         Rlimits
 	stoppedFunction chan func()
 }
 
@@ -39,6 +40,12 @@ func NewState(pid int, stoppedFunction chan func()) (*State, error) {
 		return nil, fmt.Errorf("could not create file descriptor state: %s", err)
 	}
 	state.fileDescriptors = fileDescriptors
+
+	rlimits, err := newRlimits(pid)
+	if err != nil {
+		return nil, fmt.Errorf("could not create rlimit state: %s", err)
+	}
+	state.rlimits = rlimits
 
 	state.pid = pid
 

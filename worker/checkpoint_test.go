@@ -6,34 +6,51 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"golang.org/x/sys/unix"
 
 	. "github.com/ostenbom/refunction/worker"
 )
 
 var _ = Describe("Worker Manager checkpointing", func() {
 	var id string
+	var worker *Worker
+	var targetLayer string
+	runtime := "alpine"
 
 	BeforeEach(func() {
 		id = strconv.Itoa(GinkgoParallelNode())
 	})
 
+	JustBeforeEach(func() {
+		var err error
+		worker, err = NewWorker(id, client, runtime, targetLayer)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(worker.Start()).To(Succeed())
+	})
+
+	AfterEach(func() {
+		err := worker.End()
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	Describe("rlimit checkpointing", func() {
+		BeforeEach(func() {
+			targetLayer = "forloopstack"
+		})
+
+		It("can get the address space limit", func() {
+			Expect(worker.Attach()).To(Succeed())
+			state, err := worker.GetState()
+			Expect(err).NotTo(HaveOccurred())
+
+			rlimits := state.GetRlimits()
+			_, exists := rlimits[unix.RLIMIT_AS]
+			Expect(exists).To(BeTrue())
+		})
+	})
+
 	Describe("memory checkpointing", func() {
-		var worker *Worker
-		var targetLayer string
-		runtime := "alpine"
-
-		JustBeforeEach(func() {
-			var err error
-			worker, err = NewWorker(id, client, runtime, targetLayer)
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(worker.Start()).To(Succeed())
-		})
-
-		AfterEach(func() {
-			err := worker.End()
-			Expect(err).NotTo(HaveOccurred())
-		})
 
 		Context("for loop stack + heap", func() {
 			BeforeEach(func() {
