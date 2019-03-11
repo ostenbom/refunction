@@ -39,13 +39,17 @@ var _ = Describe("Worker Manager checkpointing", func() {
 			targetLayer = "forloopstack"
 		})
 
-		It("can get the address space limit", func() {
+		It("can get the processes limits", func() {
 			Expect(worker.Attach()).To(Succeed())
 			state, err := worker.GetState()
 			Expect(err).NotTo(HaveOccurred())
 
 			rlimits := state.GetRlimits()
 			_, exists := rlimits[unix.RLIMIT_AS]
+			Expect(exists).To(BeTrue())
+			_, exists = rlimits[unix.RLIMIT_DATA]
+			Expect(exists).To(BeTrue())
+			_, exists = rlimits[unix.RLIMIT_STACK]
 			Expect(exists).To(BeTrue())
 		})
 	})

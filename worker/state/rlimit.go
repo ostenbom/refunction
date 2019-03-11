@@ -9,15 +9,25 @@ import (
 
 type Rlimits map[int]*unix.Rlimit
 
+func resourceList() []int {
+	return []int{
+		unix.RLIMIT_AS,
+		unix.RLIMIT_DATA,
+		unix.RLIMIT_STACK,
+	}
+}
+
 func newRlimits(pid int) (Rlimits, error) {
 	rlimits := make(Rlimits)
 	rlimit := new(unix.Rlimit)
 
-	err := prlimit(pid, unix.RLIMIT_AS, rlimit, nil)
-	if err != nil {
-		return nil, fmt.Errorf("could not get rlimit: %s", err)
+	for _, resource := range resourceList() {
+		err := prlimit(pid, resource, rlimit, nil)
+		if err != nil {
+			return nil, fmt.Errorf("could not get rlimit: %s", err)
+		}
+		rlimits[resource] = rlimit
 	}
-	rlimits[unix.RLIMIT_AS] = rlimit
 
 	return rlimits, nil
 }
