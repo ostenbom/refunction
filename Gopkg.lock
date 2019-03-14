@@ -2,14 +2,6 @@
 
 
 [[projects]]
-  branch = "containerd-process-poc"
-  digest = "1:2c376bb03e066dec5f3bfb05da3e82c073b35bf4a51962d0825fc0f948a828f1"
-  name = "code.cloudfoundry.org/guardian"
-  packages = ["gqt/containerdrunner"]
-  pruneopts = "UT"
-  revision = "f15c262e3e55efbd026a0084aeb5f0ca03ad2b41"
-
-[[projects]]
   digest = "1:f9ae348e1f793dcf9ed930ed47136a67343dbd6809c5c91391322267f4476892"
   name = "github.com/Microsoft/go-winio"
   packages = ["."]
@@ -299,6 +291,14 @@
   version = "v0.8.0"
 
 [[projects]]
+  digest = "1:76b02b3f516299ddfed21a4e7ce26cda0b9a57f14575bfe4aa2d644ea0e8e24c"
+  name = "github.com/seccomp/libseccomp-golang"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "e3496e3a417d1dc9ecdceca5af2513271fed37a0"
+  version = "v0.9.0"
+
+[[projects]]
   digest = "1:ee1da6524260ed66de5eacdf4def98a365576be6c6972faa8ef438bef324843d"
   name = "github.com/sirupsen/logrus"
   packages = ["."]
@@ -455,14 +455,24 @@
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
-    "code.cloudfoundry.org/guardian/gqt/containerdrunner",
     "github.com/burntsushi/toml",
     "github.com/containerd/containerd",
+    "github.com/containerd/containerd/api/types",
+    "github.com/containerd/containerd/archive",
     "github.com/containerd/containerd/cio",
+    "github.com/containerd/containerd/containers",
+    "github.com/containerd/containerd/errdefs",
+    "github.com/containerd/containerd/mount",
     "github.com/containerd/containerd/namespaces",
     "github.com/containerd/containerd/oci",
+    "github.com/containerd/containerd/snapshots",
     "github.com/onsi/ginkgo",
     "github.com/onsi/gomega",
+    "github.com/onsi/gomega/gbytes",
+    "github.com/onsi/gomega/gexec",
+    "github.com/opencontainers/runtime-spec/specs-go",
+    "github.com/seccomp/libseccomp-golang",
+    "golang.org/x/sys/unix",
   ]
   solver-name = "gps-cdcl"
   solver-version = 1

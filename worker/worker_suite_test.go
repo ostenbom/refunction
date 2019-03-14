@@ -7,12 +7,12 @@ import (
 	"path/filepath"
 	"testing"
 
-	"code.cloudfoundry.org/guardian/gqt/containerdrunner"
 	"github.com/burntsushi/toml"
 	"github.com/containerd/containerd"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
+	"github.com/ostenbom/refunction/worker/containerdrunner"
 )
 
 var (

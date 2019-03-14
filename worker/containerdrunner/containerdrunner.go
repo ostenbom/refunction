@@ -12,24 +12,17 @@ import (
 	"github.com/onsi/gomega/gexec"
 )
 
-type Binaries struct {
-	Dir        string
-	Containerd string
-	Ctr        string
-}
-
 type Config struct {
-	Root      string      `toml:"root"`
-	State     string      `toml:"state"`
-	Subreaper bool        `toml:"subreaper"`
-	OomScore  int         `toml:"oom_score"`
-	GRPC      GRPCConfig  `toml:"grpc"`
-	Debug     DebugConfig `toml:"debug"`
+	Root            string      `toml:"root"`
+	State           string      `toml:"state"`
+	Subreaper       bool        `toml:"subreaper"`
+	OomScore        int         `toml:"oom_score"`
+	GRPC            GRPCConfig  `toml:"grpc"`
+	Debug           DebugConfig `toml:"debug"`
+	DisabledPlugins []string    `toml:"disabled_plugins"`
+	Plugins         Plugins     `toml:"plugins"`
 
-	BinariesDir   string
-	ContainerdBin string
-	CtrBin        string
-	RunDir        string
+	RunDir string
 }
 
 type GRPCConfig struct {
@@ -39,6 +32,14 @@ type GRPCConfig struct {
 type DebugConfig struct {
 	Address string `toml:"address"`
 	Level   string `toml:"level"`
+}
+
+type Plugins struct {
+	Linux Linux `toml:"linux"`
+}
+
+type Linux struct {
+	ShimDebug bool `toml:"shim_debug"`
 }
 
 func ContainerdConfig(containerdDataDir string) Config {
@@ -52,19 +53,27 @@ func ContainerdConfig(containerdDataDir string) Config {
 		},
 		Debug: DebugConfig{
 			Address: filepath.Join(containerdDataDir, "debug.sock"),
-			Level:   "info",
+			Level:   "debug",
+		},
+		DisabledPlugins: []string{
+			"cri",
+		},
+		Plugins: Plugins{
+			Linux: Linux{
+				ShimDebug: true,
+			},
 		},
 	}
 }
 
-func NewSession(runDir string, bins Binaries, config Config) *gexec.Session {
+func NewSession(runDir string, config Config) *gexec.Session {
 	configFile, err := os.OpenFile(filepath.Join(runDir, "containerd.toml"), os.O_TRUNC|os.O_WRONLY|os.O_CREATE, os.ModePerm)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(toml.NewEncoder(configFile).Encode(&config)).To(Succeed())
 	Expect(configFile.Close()).To(Succeed())
 
-	cmd := exec.Command(bins.Containerd, "--config", configFile.Name())
-	cmd.Env = append(os.Environ(), fmt.Sprintf("PATH=%s", fmt.Sprintf("%s:%s", os.Getenv("PATH"), bins.Dir)))
+	cmd := exec.Command("containerd", "--config", configFile.Name())
+	cmd.Env = append(os.Environ(), fmt.Sprintf("PATH=%s", fmt.Sprintf("%s:%s", os.Getenv("PATH"), "/usr/local/bin")))
 	session, err := gexec.Start(cmd, GinkgoWriter, GinkgoWriter)
 	Expect(err).NotTo(HaveOccurred())
 	return session
