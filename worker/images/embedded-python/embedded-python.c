@@ -25,6 +25,7 @@ synch_signal (int sig) {
 void nothing(int sig) {
 }
 
+void send_response(char*);
 void log_line(char*);
 void error_line(char*);
 cJSON* recv_json();
@@ -32,8 +33,8 @@ cJSON* recv_json();
 void activate();
 
 int main(int argc, char *argv[]) {
-  char pidstring[10];
-  sprintf(pidstring, "%d", getpid());
+  char pidstring[100];
+  sprintf(pidstring, "Pid: %d", getpid());
   log_line(pidstring);
 
   activate();
@@ -48,26 +49,126 @@ int main(int argc, char *argv[]) {
   Py_Initialize();
   log_line("python started");
 
+  PyObject *json_module, *json_module_name;
+  json_module_name = PyUnicode_DecodeFSDefault("json");
+  json_module = PyImport_Import(json_module_name);
+  if (json_module == NULL) {
+      fprintf(stderr, "Error: cannot import json module\n");
+      exit(1);
+  }
+  log_line("imported json");
+
+  // TODO: Do this before or after checkpoint??
+  PyObject *phandle_func, *plocal, *pvalue;
+  PyObject *pglobal = PyDict_New();
+  PyObject *handle_module = PyModule_New("handler");
+  PyModule_AddStringConstant(handle_module, "__file__", "");
+  plocal = PyModule_GetDict(handle_module);
+
   /* Alert checkpoint */
   raise(SIGUSR1);
   log_line("post checkpoint");
+
   cJSON *function_json = recv_json();
   cJSON *handler = cJSON_GetObjectItemCaseSensitive(function_json, "handler");
-  char *handler_string = cJSON_Print(handler);
+  char *handler_string = handler->valuestring;
+  // First and last characters are "
+  /* handler_string++; */
+  /* handler_string[strlen(handler_string)-1] = 0; */
+
   log_line(handler_string);
 
-  PyRun_SimpleString("from time import time,ctime\n"
-                     "print('Today is', ctime(time()))\n");
-  Py_Finalize();
-  PyMem_RawFree(program);
-  return 0;
+  pvalue = PyRun_String(handler_string, Py_file_input, pglobal, plocal);
+  if (pvalue == NULL) {
+      if (PyErr_Occurred()) {
+        PyErr_Print();
+      }
+      fprintf(stderr, "Error: could not load handle function\n");
+      exit(1);
+  }
+  Py_DECREF(pvalue);
 
-  /* printf("done\n"); */
-  /* // Done */
-  /* raise(SIGUSR2); */
-  /* while (1) { */
-  /*   raise(SIGUSR1); */
-  /* } */
+  phandle_func = PyObject_GetAttrString(handle_module, "handle");
+
+  if (!phandle_func || !PyCallable_Check(phandle_func)) {
+      if (PyErr_Occurred()) {
+        PyErr_Print();
+      }
+      fprintf(stderr, "Error: obtain handle function from module\n");
+      exit(1);
+  }
+
+  log_line("handle function successfully loaded");
+
+  cJSON *req_json = recv_json();
+  // TODO: Check if json is type request
+  cJSON *request_data = cJSON_GetObjectItemCaseSensitive(req_json, "data");
+  char *request_data_string = request_data->valuestring;
+  log_line(request_data_string);
+
+  // json.loads(request)
+  PyObject *pjson_request, *pjson_call_args, *pjson_loads, *prequest;
+  // TODO: how to dec these refs
+  pjson_request = PyUnicode_FromString(request_data_string);
+  pjson_call_args = PyTuple_New(1);
+  PyTuple_SetItem(pjson_call_args, 0, pjson_request);
+
+  pjson_loads = PyObject_GetAttrString(json_module, "loads");
+  prequest = PyObject_CallObject(pjson_loads, pjson_call_args);
+  Py_XDECREF(pjson_loads);
+
+
+  // Create args for handle func
+  PyObject *phandle_args;
+  phandle_args = PyTuple_New(1);
+  PyTuple_SetItem(phandle_args, 0, prequest);
+
+  // Call handle func
+  PyObject *presponse;
+  presponse = PyObject_CallObject(phandle_func, phandle_args);
+
+  // json.dumps(response)
+  PyObject *pjson_response, *pjson_dumps;
+  pjson_dumps = PyObject_GetAttrString(json_module, "dumps");
+  PyTuple_SetItem(pjson_call_args, 0, presponse);
+  pjson_response = PyObject_CallObject(pjson_dumps, pjson_call_args);
+  Py_XDECREF(pjson_dumps);
+
+  PyObject *ascii_response;
+  ascii_response = PyUnicode_AsASCIIString(pjson_response);
+  send_response(PyBytes_AsString(ascii_response));
+
+  Py_DECREF(ascii_response);
+  Py_DECREF(presponse);
+  Py_DECREF(pjson_response);
+  Py_DECREF(phandle_args);
+  Py_DECREF(pjson_call_args);
+  Py_DECREF(pjson_request);
+  cJSON_Delete(function_json);
+
+  // Done
+  raise(SIGUSR2);
+  while (1) {
+    raise(SIGUSR1);
+  }
+  /* Py_Finalize(); */
+  /* PyMem_RawFree(program); */
+  /* return 0; */
+}
+
+void send_response(char* response) {
+  char *log_string = NULL;
+  cJSON *log = cJSON_CreateObject();
+  cJSON *jresponse = cJSON_Parse(response);
+
+  cJSON_AddStringToObject(log, "type", "response");
+  cJSON_AddItemToObject(log, "response", jresponse);
+
+  log_string = cJSON_Print(log);
+  printf("%s\n", log_string);
+  free(log_string);
+  fflush(stdout);
+  cJSON_Delete(log);
 }
 
 void error_line(char* errorline) {
