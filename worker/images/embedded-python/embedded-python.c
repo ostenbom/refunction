@@ -31,6 +31,8 @@ void error_line(char*);
 cJSON* recv_json();
 
 void activate();
+void start_python(char*);
+PyObject* import_module(char*);
 
 int main(int argc, char *argv[]) {
   char pidstring[100];
@@ -40,30 +42,18 @@ int main(int argc, char *argv[]) {
   activate();
   log_line("activated");
 
-  wchar_t *program = Py_DecodeLocale(argv[0], NULL);
-  if (program == NULL) {
-      fprintf(stderr, "Fatal error: cannot decode argv[0]\n");
-      exit(1);
-  }
-  Py_SetProgramName(program);  /* optional but recommended */
-  Py_Initialize();
+  start_python(argv[0]);
   log_line("python started");
 
-  PyObject *json_module, *json_module_name;
-  json_module_name = PyUnicode_DecodeFSDefault("json");
-  json_module = PyImport_Import(json_module_name);
-  if (json_module == NULL) {
-      fprintf(stderr, "Error: cannot import json module\n");
-      exit(1);
-  }
+  PyObject *json_module = import_module("json");
   log_line("imported json");
 
   // TODO: Do this before or after checkpoint??
-  PyObject *phandle_func, *plocal, *pvalue;
+  PyObject *phandle_func, *pvalue;
   PyObject *pglobal = PyDict_New();
   PyObject *handle_module = PyModule_New("handler");
   PyModule_AddStringConstant(handle_module, "__file__", "");
-  plocal = PyModule_GetDict(handle_module);
+  PyObject *plocal = PyModule_GetDict(handle_module);
 
   /* Alert checkpoint */
   raise(SIGUSR1);
@@ -72,12 +62,9 @@ int main(int argc, char *argv[]) {
   cJSON *function_json = recv_json();
   cJSON *handler = cJSON_GetObjectItemCaseSensitive(function_json, "handler");
   char *handler_string = handler->valuestring;
-  // First and last characters are "
-  /* handler_string++; */
-  /* handler_string[strlen(handler_string)-1] = 0; */
-
   log_line(handler_string);
 
+  // Load handler function into module
   pvalue = PyRun_String(handler_string, Py_file_input, pglobal, plocal);
   if (pvalue == NULL) {
       if (PyErr_Occurred()) {
@@ -108,7 +95,6 @@ int main(int argc, char *argv[]) {
 
   // json.loads(request)
   PyObject *pjson_request, *pjson_call_args, *pjson_loads, *prequest;
-  // TODO: how to dec these refs
   pjson_request = PyUnicode_FromString(request_data_string);
   pjson_call_args = PyTuple_New(1);
   PyTuple_SetItem(pjson_call_args, 0, pjson_request);
@@ -116,7 +102,6 @@ int main(int argc, char *argv[]) {
   pjson_loads = PyObject_GetAttrString(json_module, "loads");
   prequest = PyObject_CallObject(pjson_loads, pjson_call_args);
   Py_XDECREF(pjson_loads);
-
 
   // Create args for handle func
   PyObject *phandle_args;
@@ -195,6 +180,28 @@ void log_line(char* logline) {
   printf("%s\n", log_string);
   free(log_string);
   fflush(stdout);
+}
+
+void start_python(char* program_name) {
+  wchar_t *program = Py_DecodeLocale(program_name, NULL);
+  if (program == NULL) {
+      fprintf(stderr, "Fatal error: cannot decode argv[0]\n");
+      exit(1);
+  }
+  Py_SetProgramName(program);  /* optional but recommended */
+  Py_Initialize();
+}
+
+PyObject* import_module(char* str_name) {
+  PyObject *module, *module_name;
+  module_name = PyUnicode_DecodeFSDefault(str_name);
+  module = PyImport_Import(module_name);
+  if (module == NULL) {
+      fprintf(stderr, "Error: cannot import %s module\n", str_name);
+      exit(1);
+  }
+  Py_DECREF(module_name);
+  return module;
 }
 
 cJSON* recv_json() {
