@@ -3,6 +3,7 @@
 #include <sys/ptrace.h>
 #include <sys/wait.h>
 #include <sys/types.h>
+#include <stropts.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -16,13 +17,34 @@
 #define JSON_BUFFER_MAX_SIZE 4096
 
 volatile sig_atomic_t usr_interrupt = 0;
+volatile sig_atomic_t server_finish = 0;
 
-void
-synch_signal (int sig) {
+void synch_signal(int sig) {
   usr_interrupt = 1;
 }
 
+void start_server() {
+  server_finish = 0;
+}
+
+void end_server(int sig) {
+  server_finish = 1;
+}
+
 void nothing(int sig) {
+
+}
+
+int stdinHasInput()
+{
+  struct timeval tv;
+  fd_set fds;
+  tv.tv_sec = 0;
+  tv.tv_usec = 0;
+  FD_ZERO(&fds);
+  FD_SET(STDIN_FILENO, &fds);
+  select(STDIN_FILENO+1, &fds, NULL, NULL, &tv);
+  return (FD_ISSET(0, &fds));
 }
 
 void send_response(char*);
@@ -35,7 +57,7 @@ void start_python(char*);
 PyObject* import_module(char*);
 
 int main(int argc, char *argv[]) {
-  char pidstring[100];
+  char pidstring[50];
   sprintf(pidstring, "Pid: %d", getpid());
   log_line(pidstring);
 
@@ -74,6 +96,7 @@ int main(int argc, char *argv[]) {
       exit(1);
   }
   Py_DECREF(pvalue);
+  cJSON_Delete(function_json);
 
   phandle_func = PyObject_GetAttrString(handle_module, "handle");
 
@@ -85,51 +108,64 @@ int main(int argc, char *argv[]) {
       exit(1);
   }
 
+
   log_line("handle function successfully loaded");
 
-  cJSON *req_json = recv_json();
-  // TODO: Check if json is type request
-  cJSON *request_data = cJSON_GetObjectItemCaseSensitive(req_json, "data");
-  char *request_data_string = request_data->valuestring;
-  log_line(request_data_string);
+  start_server();
+  while (!server_finish) {
+    if (!stdinHasInput()) {
+      struct timespec readwait;
+      readwait.tv_sec = 0;
+      readwait.tv_nsec = 10000000L; // 10ms
+      nanosleep(&readwait, NULL);
+      continue;
+    }
 
-  // json.loads(request)
-  PyObject *pjson_request, *pjson_call_args, *pjson_loads, *prequest;
-  pjson_request = PyUnicode_FromString(request_data_string);
-  pjson_call_args = PyTuple_New(1);
-  PyTuple_SetItem(pjson_call_args, 0, pjson_request);
+    cJSON *req_json = recv_json();
+    // TODO: Check if json is type request
+    cJSON *request_data = cJSON_GetObjectItemCaseSensitive(req_json, "data");
+    char *request_data_string = request_data->valuestring;
+    log_line(request_data_string);
 
-  pjson_loads = PyObject_GetAttrString(json_module, "loads");
-  prequest = PyObject_CallObject(pjson_loads, pjson_call_args);
-  Py_XDECREF(pjson_loads);
+    // json.loads(request)
+    PyObject *pjson_request, *pjson_call_args, *pjson_loads, *prequest;
+    pjson_request = PyUnicode_FromString(request_data_string);
+    pjson_call_args = PyTuple_New(1);
+    PyTuple_SetItem(pjson_call_args, 0, pjson_request);
 
-  // Create args for handle func
-  PyObject *phandle_args;
-  phandle_args = PyTuple_New(1);
-  PyTuple_SetItem(phandle_args, 0, prequest);
+    pjson_loads = PyObject_GetAttrString(json_module, "loads");
+    prequest = PyObject_CallObject(pjson_loads, pjson_call_args);
+    Py_XDECREF(pjson_loads);
 
-  // Call handle func
-  PyObject *presponse;
-  presponse = PyObject_CallObject(phandle_func, phandle_args);
+    // Create args for handle func
+    PyObject *phandle_args;
+    phandle_args = PyTuple_New(1);
+    PyTuple_SetItem(phandle_args, 0, prequest);
 
-  // json.dumps(response)
-  PyObject *pjson_response, *pjson_dumps;
-  pjson_dumps = PyObject_GetAttrString(json_module, "dumps");
-  PyTuple_SetItem(pjson_call_args, 0, presponse);
-  pjson_response = PyObject_CallObject(pjson_dumps, pjson_call_args);
-  Py_XDECREF(pjson_dumps);
+    // Call handle func
+    PyObject *presponse;
+    presponse = PyObject_CallObject(phandle_func, phandle_args);
 
-  PyObject *ascii_response;
-  ascii_response = PyUnicode_AsASCIIString(pjson_response);
-  send_response(PyBytes_AsString(ascii_response));
+    // json.dumps(response)
+    PyObject *pjson_response, *pjson_dumps;
+    pjson_dumps = PyObject_GetAttrString(json_module, "dumps");
+    PyTuple_SetItem(pjson_call_args, 0, presponse);
+    pjson_response = PyObject_CallObject(pjson_dumps, pjson_call_args);
+    Py_XDECREF(pjson_dumps);
 
-  Py_DECREF(ascii_response);
-  Py_DECREF(presponse);
-  Py_DECREF(pjson_response);
-  Py_DECREF(phandle_args);
-  Py_DECREF(pjson_call_args);
-  Py_DECREF(pjson_request);
-  cJSON_Delete(function_json);
+    PyObject *ascii_response;
+    ascii_response = PyUnicode_AsASCIIString(pjson_response);
+    send_response(PyBytes_AsString(ascii_response));
+
+    Py_DECREF(ascii_response);
+    Py_DECREF(presponse);
+    Py_DECREF(pjson_response);
+    Py_DECREF(phandle_args);
+    Py_DECREF(pjson_call_args);
+    Py_DECREF(pjson_request);
+  }
+
+  log_line("finished server");
 
   // Done
   raise(SIGUSR2);
@@ -253,4 +289,10 @@ void activate() {
     nanosleep(&signalwait, NULL);
   }
   sigprocmask (SIG_SETMASK, &oldmask, NULL);
+
+  struct sigaction stop_server_action;
+  sigemptyset(&stop_server_action.sa_mask);
+  stop_server_action.sa_handler = end_server;
+  stop_server_action.sa_flags = SA_NODEFER;
+  sigaction(SIGUSR2, &stop_server_action, NULL);
 }
