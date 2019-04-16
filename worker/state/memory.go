@@ -20,6 +20,10 @@ type Memory struct {
 	content       []byte
 }
 
+func (m *Memory) GetOffsets() (int64, int64, int64) {
+	return m.startOffset, m.endOffset, m.processOffset
+}
+
 func newMemoryLocations(pid int) ([]*Memory, error) {
 	var memoryLocations []*Memory
 
@@ -61,7 +65,53 @@ func newMemoryLocations(pid int) ([]*Memory, error) {
 	return memoryLocations, nil
 }
 
+func (s *State) GetMemoryLocationNames() []string {
+	var locationNames []string
+	for _, m := range s.memoryLocations {
+		locationNames = append(locationNames, m.name)
+	}
+
+	return locationNames
+}
+
+func (s *State) SaveWritableMemory() error {
+	for _, location := range s.memoryLocations {
+		if strings.Contains(location.permissions, "w") {
+			fmt.Printf("location is: %s\n", location.name)
+			err := s.SavePages(location.name)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (m *Memory) StartOffset() int64 {
+	return m.startOffset
+}
+
+func (m *Memory) EndOffset() int64 {
+	return m.endOffset
+}
+
 func (s *State) getMemory(memoryName string) (*Memory, error) {
+	var memory *Memory
+	for _, m := range s.memoryLocations {
+		if m.name == memoryName {
+			memory = m
+			break
+		}
+	}
+	if memory == nil {
+		return nil, fmt.Errorf("no memory %s found", memoryName)
+	}
+
+	return memory, nil
+}
+
+func (s *State) GetMemory(memoryName string) (*Memory, error) {
 	var memory *Memory
 	for _, m := range s.memoryLocations {
 		if m.name == memoryName {
@@ -206,6 +256,18 @@ func (s *State) RestoreDirtyPages(memoryName string) error {
 
 		currentPageOffset += pageSize
 		currentByteNum += int(pageSize)
+	}
+
+	return nil
+}
+
+func (s *State) PrintAllDirtyPages() error {
+	for _, m := range s.memoryLocations {
+		dirty, err := s.CountDirtyPages(m.name)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("%s, perm: %s, dev: %d:%d, has %d dirty\n", m.name, m.permissions, m.majorDevice, m.minorDevice, dirty)
 	}
 
 	return nil
