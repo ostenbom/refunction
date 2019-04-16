@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -124,12 +125,12 @@ type FunctionData struct {
 	Data interface{} `json:"data"`
 }
 
-func (m *Worker) WithStdPipeCommunication(stdoutWriters ...io.Writer) {
+func (m *Worker) WithStdPipeCommunication(stderrWriter io.Writer, stdoutWriters ...io.Writer) {
 	m.communication = StdPipeCommunication
 	stdinRead, stdinWrite := io.Pipe()
 	stdoutRead, stdoutWrite := io.Pipe()
 	stderrRead, stderrWrite := io.Pipe()
-	m.creator = cio.NewCreator(cio.WithStreams(stdinRead, io.MultiWriter(append(stdoutWriters, stdoutWrite)...), stderrWrite))
+	m.creator = cio.NewCreator(cio.WithStreams(stdinRead, io.MultiWriter(append(stdoutWriters, stdoutWrite)...), io.MultiWriter(stderrWrite, stderrWriter)))
 
 	m.streams = &Streams{
 		Stdin:  stdinWrite,
@@ -143,13 +144,19 @@ func (m *Worker) WithStdPipeCommunication(stdoutWriters ...io.Writer) {
 
 	go func() {
 		// io.Copy(os.Stdout, stdoutRead)
-		decoder := json.NewDecoder(stdoutRead)
+		outBuffer := bufio.NewReader(stdoutRead)
 
 		for {
-			var data FunctionData
-			err := decoder.Decode(&data)
+			line, err := outBuffer.ReadString('\n')
 			if err != nil {
 				return
+			}
+			fmt.Println(line)
+
+			var data FunctionData
+			err = json.Unmarshal([]byte(line), &data)
+			if err != nil {
+				continue
 			}
 
 			switch v := data.Data.(type) {
