@@ -84,6 +84,7 @@ int main(int argc, char *argv[]) {
   raise(SIGUSR1);
   log_line("post checkpoint");
 
+  log_line("starting function json load");
   /* Receive handler function string */
   cJSON *function_json = recv_json();
   cJSON *handler = cJSON_GetObjectItemCaseSensitive(function_json, "handler");
@@ -142,6 +143,8 @@ int main(int argc, char *argv[]) {
     Py_XDECREF(pjson_loads);
     if (prequest == NULL) {
       log_line("failure when loading request json");
+      PyErr_Print();
+      fflush(stderr);
       exit(1);
     }
 
@@ -158,6 +161,7 @@ int main(int argc, char *argv[]) {
     if (presponse == NULL) {
       log_line("failure in handle call");
       PyErr_Print();
+      fflush(stderr);
       exit(1);
     }
 
@@ -202,7 +206,7 @@ void send_function_loaded() {
   cJSON_AddStringToObject(log, "type", "function_loaded");
   cJSON_AddStringToObject(log, "data", "");
 
-  log_string = cJSON_Print(log);
+  log_string = cJSON_PrintUnformatted(log);
   printf("%s\n", log_string);
   free(log_string);
   fflush(stdout);
@@ -217,7 +221,7 @@ void send_response(char* response) {
   cJSON_AddStringToObject(log, "type", "response");
   cJSON_AddItemToObject(log, "data", jresponse);
 
-  log_string = cJSON_Print(log);
+  log_string = cJSON_PrintUnformatted(log);
   printf("%s\n", log_string);
   free(log_string);
   fflush(stdout);
@@ -231,10 +235,11 @@ void error_line(char* errorline) {
   cJSON_AddStringToObject(log, "type", "error");
   cJSON_AddStringToObject(log, "data", errorline);
 
-  log_string = cJSON_Print(log);
+  log_string = cJSON_PrintUnformatted(log);
   printf("%s\n", log_string);
   free(log_string);
   fflush(stdout);
+  cJSON_Delete(log);
 }
 
 void log_line(char* logline) {
@@ -244,10 +249,11 @@ void log_line(char* logline) {
   cJSON_AddStringToObject(log, "type", "log");
   cJSON_AddStringToObject(log, "data", logline);
 
-  log_string = cJSON_Print(log);
+  log_string = cJSON_PrintUnformatted(log);
   printf("%s\n", log_string);
   free(log_string);
   fflush(stdout);
+  cJSON_Delete(log);
 }
 
 void start_python(char* program_name) {
@@ -284,8 +290,8 @@ cJSON* recv_json() {
   }
 
   getline(&buffer, &buffsize, stdin);
-
   cJSON *parsed_json = cJSON_Parse(buffer);
+  free(buffer);
   return parsed_json;
 }
 

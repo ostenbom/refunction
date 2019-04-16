@@ -19,9 +19,9 @@ func resourceList() []int {
 
 func newRlimits(pid int) (Rlimits, error) {
 	rlimits := make(Rlimits)
-	rlimit := new(unix.Rlimit)
 
 	for _, resource := range resourceList() {
+		rlimit := new(unix.Rlimit)
 		err := prlimit(pid, resource, rlimit, nil)
 		if err != nil {
 			return nil, fmt.Errorf("could not get rlimit: %s", err)
