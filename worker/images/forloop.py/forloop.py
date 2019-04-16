@@ -33,5 +33,5 @@ while True:
     f.flush()
     print("at:", count, flush=True)
     count += 1
-    time.sleep(0.05)
+    time.sleep(0.02)
 

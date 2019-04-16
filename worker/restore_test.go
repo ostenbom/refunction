@@ -132,7 +132,7 @@ var _ = Describe("Worker Restoring", func() {
 				countLocation := getRootfs(worker) + "/tmp/count.txt"
 				WaitFileExists(countLocation)
 
-				time.Sleep(time.Millisecond * 50)
+				time.Sleep(time.Millisecond * 60)
 				Expect(worker.Stop()).To(Succeed())
 
 				// Work out what will be printed next
