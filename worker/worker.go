@@ -404,7 +404,6 @@ func (m *Worker) SendRequest(request string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("could not get request response: %s", err)
 	}
-	fmt.Println(resp.Response)
 
 	return resp.Response, nil
 }

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"runtime"
 	"strconv"
 	"syscall"
 
@@ -11,6 +12,7 @@ import (
 )
 
 func main() {
+	runtime.LockOSThread()
 	if len(os.Args) <= 1 {
 		panic("provide pid please")
 	}
@@ -58,6 +60,28 @@ func main() {
 		panic(err)
 	}
 	worker.AwaitSignal(syscall.SIGUSR2)
+
+	err = worker.TakeCheckpoint()
+	if err != nil {
+		panic(err)
+	}
+
+	checkpoints := worker.GetCheckpoints()
+	stack1, err := checkpoints[0].GetMemory("[stack]")
+	if err != nil {
+		panic(err)
+	}
+	stack2, err := checkpoints[1].GetMemory("[stack]")
+	if err != nil {
+		panic(err)
+	}
+	start1, end1, process1 := stack1.GetOffsets()
+	start2, end2, process2 := stack2.GetOffsets()
+	fmt.Printf("start1: %d, end1: %d, process1: %d\n", start1, end1, process1)
+	fmt.Printf("start2: %d, end2: %d, process2: %d\n", start2, end2, process2)
+
+	fmt.Print("> ")
+	_, _ = buf.ReadBytes('\n')
 	// time.Sleep(time.Second * 20)
 	err = worker.Restore()
 	if err != nil {
