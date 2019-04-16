@@ -47,6 +47,7 @@ int stdinHasInput()
   return (FD_ISSET(0, &fds));
 }
 
+void send_function_loaded();
 void send_response(char*);
 void log_line(char*);
 void error_line(char*);
@@ -76,17 +77,20 @@ int main(int argc, char *argv[]) {
   PyObject *handle_module = PyModule_New("handler");
   PyModule_AddStringConstant(handle_module, "__file__", "");
   PyObject *plocal = PyModule_GetDict(handle_module);
+  PyObject *builtins = PyEval_GetBuiltins();
+  PyDict_SetItemString(pglobal, "__builtins__", builtins);
 
   /* Alert checkpoint */
   raise(SIGUSR1);
   log_line("post checkpoint");
 
+  /* Receive handler function string */
   cJSON *function_json = recv_json();
   cJSON *handler = cJSON_GetObjectItemCaseSensitive(function_json, "handler");
   char *handler_string = handler->valuestring;
   log_line(handler_string);
 
-  // Load handler function into module
+  /* Load handler function into module */
   pvalue = PyRun_String(handler_string, Py_file_input, pglobal, plocal);
   if (pvalue == NULL) {
       if (PyErr_Occurred()) {
@@ -108,8 +112,8 @@ int main(int argc, char *argv[]) {
       exit(1);
   }
 
-
   log_line("handle function successfully loaded");
+  send_function_loaded();
 
   start_server();
   while (!server_finish) {
@@ -136,6 +140,12 @@ int main(int argc, char *argv[]) {
     pjson_loads = PyObject_GetAttrString(json_module, "loads");
     prequest = PyObject_CallObject(pjson_loads, pjson_call_args);
     Py_XDECREF(pjson_loads);
+    if (prequest == NULL) {
+      log_line("failure when loading request json");
+      exit(1);
+    }
+
+    log_line("json loaded");
 
     // Create args for handle func
     PyObject *phandle_args;
@@ -145,6 +155,13 @@ int main(int argc, char *argv[]) {
     // Call handle func
     PyObject *presponse;
     presponse = PyObject_CallObject(phandle_func, phandle_args);
+    if (presponse == NULL) {
+      log_line("failure in handle call");
+      PyErr_Print();
+      exit(1);
+    }
+
+    log_line("handle called");
 
     // json.dumps(response)
     PyObject *pjson_response, *pjson_dumps;
@@ -152,6 +169,8 @@ int main(int argc, char *argv[]) {
     PyTuple_SetItem(pjson_call_args, 0, presponse);
     pjson_response = PyObject_CallObject(pjson_dumps, pjson_call_args);
     Py_XDECREF(pjson_dumps);
+
+    log_line("json dumped");
 
     PyObject *ascii_response;
     ascii_response = PyUnicode_AsASCIIString(pjson_response);
@@ -177,13 +196,26 @@ int main(int argc, char *argv[]) {
   /* return 0; */
 }
 
+void send_function_loaded() {
+  char *log_string = NULL;
+  cJSON *log = cJSON_CreateObject();
+  cJSON_AddStringToObject(log, "type", "function_loaded");
+  cJSON_AddStringToObject(log, "data", "");
+
+  log_string = cJSON_Print(log);
+  printf("%s\n", log_string);
+  free(log_string);
+  fflush(stdout);
+  cJSON_Delete(log);
+}
+
 void send_response(char* response) {
   char *log_string = NULL;
   cJSON *log = cJSON_CreateObject();
   cJSON *jresponse = cJSON_Parse(response);
 
   cJSON_AddStringToObject(log, "type", "response");
-  cJSON_AddItemToObject(log, "response", jresponse);
+  cJSON_AddItemToObject(log, "data", jresponse);
 
   log_string = cJSON_Print(log);
   printf("%s\n", log_string);
@@ -254,8 +286,6 @@ cJSON* recv_json() {
   getline(&buffer, &buffsize, stdin);
 
   cJSON *parsed_json = cJSON_Parse(buffer);
-
-
   return parsed_json;
 }
 

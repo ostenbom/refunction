@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"reflect"
 	"syscall"
 	"time"
 
@@ -39,6 +40,19 @@ type PtraceChannels struct {
 	Error          chan error
 }
 
+type CommunicationType int
+
+const (
+	SocketCommunication CommunicationType = iota + 1
+	StdPipeCommunication
+)
+
+type Streams struct {
+	Stdin  *io.PipeWriter
+	Stdout *io.PipeReader
+	Stderr *io.PipeReader
+}
+
 func NewWorker(id string, client *containerd.Client, runtime, targetSnapshot string) (*Worker, error) {
 	ctx := namespaces.WithNamespace(context.Background(), "refunction-worker"+id)
 
@@ -48,13 +62,16 @@ func NewWorker(id string, client *containerd.Client, runtime, targetSnapshot str
 	}
 
 	return &Worker{
-		ID:             id,
-		targetSnapshot: targetSnapshot,
-		runtime:        runtime,
-		client:         client,
-		ctx:            ctx,
-		creator:        cio.NullIO,
-		snapManager:    snapManager,
+		ID:                     id,
+		targetSnapshot:         targetSnapshot,
+		runtime:                runtime,
+		communication:          SocketCommunication,
+		responses:              make(chan FunctionData, 1),
+		functionLoadedMessages: make(chan string, 1),
+		client:                 client,
+		ctx:                    ctx,
+		creator:                cio.NullIO,
+		snapManager:            snapManager,
 		ptrace: PtraceChannels{
 			SignalStop:     make(chan syscall.WaitStatus, 1),
 			Continue:       make(chan syscall.Signal),
@@ -69,28 +86,88 @@ func NewWorker(id string, client *containerd.Client, runtime, targetSnapshot str
 }
 
 type Worker struct {
-	ID             string
-	ContainerID    string
-	targetSnapshot string
-	runtime        string
-	client         *containerd.Client
-	ctx            context.Context
-	creator        cio.Creator
-	snapManager    *SnapshotManager
-	container      containerd.Container
-	task           containerd.Task
-	taskExitChan   <-chan containerd.ExitStatus
-	checkpoints    []*State
-	attached       bool
-	attachOptions  []int
-	ptrace         PtraceChannels
-	straceEnabled  bool
-	straceOutput   io.Writer
-	IP             net.IP
+	ID                     string
+	ContainerID            string
+	targetSnapshot         string
+	runtime                string
+	communication          CommunicationType
+	streams                *Streams
+	responses              chan FunctionData
+	functionLoadedMessages chan string
+	client                 *containerd.Client
+	ctx                    context.Context
+	creator                cio.Creator
+	snapManager            *SnapshotManager
+	container              containerd.Container
+	task                   containerd.Task
+	taskExitChan           <-chan containerd.ExitStatus
+	checkpoints            []*State
+	attached               bool
+	attachOptions          []int
+	ptrace                 PtraceChannels
+	straceEnabled          bool
+	straceOutput           io.Writer
+	IP                     net.IP
 }
 
 type LoadFunctionReq struct {
+	Type    string `json:"type"`
 	Handler string `json:"handler"`
+}
+
+type FunctionResponse struct {
+	Response string `json:"response"`
+}
+
+type FunctionData struct {
+	Type string      `json:"type"`
+	Data interface{} `json:"data"`
+}
+
+func (m *Worker) WithStdPipeCommunication(stdoutWriters ...io.Writer) {
+	m.communication = StdPipeCommunication
+	stdinRead, stdinWrite := io.Pipe()
+	stdoutRead, stdoutWrite := io.Pipe()
+	stderrRead, stderrWrite := io.Pipe()
+	m.creator = cio.NewCreator(cio.WithStreams(stdinRead, io.MultiWriter(append(stdoutWriters, stdoutWrite)...), stderrWrite))
+
+	m.streams = &Streams{
+		Stdin:  stdinWrite,
+		Stdout: stdoutRead,
+		Stderr: stderrRead,
+	}
+
+	go func() {
+		io.Copy(os.Stderr, stderrRead)
+	}()
+
+	go func() {
+		// io.Copy(os.Stdout, stdoutRead)
+		decoder := json.NewDecoder(stdoutRead)
+
+		for {
+			var data FunctionData
+			err := decoder.Decode(&data)
+			if err != nil {
+				return
+			}
+
+			switch v := data.Data.(type) {
+			case string:
+				fmt.Printf("Data is: %s\n", v)
+			default:
+				fmt.Printf("Data was something else: %s\n", reflect.TypeOf(data.Data))
+			}
+
+			if data.Type == "info" {
+				// fmt.Println(data.Data)
+			} else if data.Type == "response" {
+				m.responses <- data
+			} else if data.Type == "function_loaded" {
+				m.functionLoadedMessages <- "loaded"
+			}
+		}
+	}()
 }
 
 func (m *Worker) WithCreator(creator cio.Creator) {
@@ -128,10 +205,10 @@ func (m *Worker) Start() error {
 	}
 
 	var processArgs []string
-	if m.runtime != "alpine" {
-		processArgs = []string{m.runtime, m.targetSnapshot}
-	} else {
+	if m.runtime == "alpine" || m.runtime == "alpinepython" {
 		processArgs = []string{m.targetSnapshot}
+	} else {
+		processArgs = []string{m.runtime, m.targetSnapshot}
 	}
 
 	ipFile, err := ioutil.TempFile("", "container-ip")
@@ -238,7 +315,20 @@ func (m *Worker) GetCheckpoints() []*State {
 }
 
 func (m *Worker) SendFunction(function string) error {
-	udpAddr := net.TCPAddr{
+	if m.communication == StdPipeCommunication {
+		functionReq := &LoadFunctionReq{Type: "function", Handler: function}
+		functionReqString, err := json.Marshal(functionReq)
+		if err != nil {
+			return err
+		}
+		newLineReq := append(functionReqString, []byte("\n")...)
+		_, err = m.streams.Stdin.Write(newLineReq)
+
+		<-m.functionLoadedMessages
+		return err
+	}
+
+	tcpAddr := net.TCPAddr{
 		IP:   m.IP,
 		Port: 5000,
 	}
@@ -249,7 +339,7 @@ func (m *Worker) SendFunction(function string) error {
 		return fmt.Errorf("could not marshal function: %s, %s", function, err)
 	}
 
-	conn, err := net.DialTCP("tcp", nil, &udpAddr)
+	conn, err := net.DialTCP("tcp", nil, &tcpAddr)
 	if err != nil {
 		return fmt.Errorf("could not dial worker: %s", err)
 	}
@@ -264,12 +354,32 @@ func (m *Worker) SendFunction(function string) error {
 }
 
 func (m *Worker) SendRequest(request string) (string, error) {
-	udpAddr := net.TCPAddr{
+	if m.communication == StdPipeCommunication {
+		functionReq := &FunctionData{Type: "request", Data: request}
+		functionReqString, err := json.Marshal(functionReq)
+		if err != nil {
+			return "", err
+		}
+		newLineReq := append(functionReqString, []byte("\n")...)
+		_, err = m.streams.Stdin.Write(newLineReq)
+		if err != nil {
+			return "", nil
+		}
+
+		resp := <-m.responses
+		switch v := resp.Data.(type) {
+		case string:
+			return v, nil
+		}
+		return "resp not a string", nil
+	}
+
+	tcpAddr := net.TCPAddr{
 		IP:   m.IP,
 		Port: 5000,
 	}
 
-	conn, err := net.DialTCP("tcp", nil, &udpAddr)
+	conn, err := net.DialTCP("tcp", nil, &tcpAddr)
 	if err != nil {
 		return "", fmt.Errorf("could not dial worker: %s", err)
 	}
@@ -280,12 +390,16 @@ func (m *Worker) SendRequest(request string) (string, error) {
 		return "", fmt.Errorf("could not write to worker: %s", err)
 	}
 
-	response, err := ioutil.ReadAll(conn)
+	decoder := json.NewDecoder(conn)
+	var resp FunctionResponse
+
+	err = decoder.Decode(&resp)
 	if err != nil {
 		return "", fmt.Errorf("could not get request response: %s", err)
 	}
+	fmt.Println(resp.Response)
 
-	return string(response), nil
+	return resp.Response, nil
 }
 
 // AwaitSignal lets the process continue until the desired signal is caught.
@@ -532,6 +646,11 @@ func (m *Worker) End() error {
 	if m.task != nil {
 		if m.attached {
 			detachErr = m.Detach()
+		}
+		if m.streams != nil {
+			m.streams.Stdin.Close()
+			m.streams.Stdout.Close()
+			m.streams.Stderr.Close()
 		}
 		if err := m.task.Kill(m.ctx, syscall.SIGKILL); err != nil {
 			if errdefs.IsFailedPrecondition(err) || errdefs.IsNotFound(err) {
