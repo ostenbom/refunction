@@ -66,19 +66,19 @@ func main() {
 		panic(err)
 	}
 
-	checkpoints := worker.GetCheckpoints()
-	stack1, err := checkpoints[0].GetMemory("[stack]")
-	if err != nil {
-		panic(err)
-	}
-	stack2, err := checkpoints[1].GetMemory("[stack]")
-	if err != nil {
-		panic(err)
-	}
-	start1, end1, process1 := stack1.GetOffsets()
-	start2, end2, process2 := stack2.GetOffsets()
-	fmt.Printf("start1: %d, end1: %d, process1: %d\n", start1, end1, process1)
-	fmt.Printf("start2: %d, end2: %d, process2: %d\n", start2, end2, process2)
+	// checkpoints := worker.GetCheckpoints()
+	// stack1, err := checkpoints[0].GetMemory("[stack]")
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// stack2, err := checkpoints[1].GetMemory("[stack]")
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// start1, end1, process1 := stack1.GetOffsets()
+	// start2, end2, process2 := stack2.GetOffsets()
+	// fmt.Printf("start1: %d, end1: %d, process1: %d\n", start1, end1, process1)
+	// fmt.Printf("start2: %d, end2: %d, process2: %d\n", start2, end2, process2)
 
 	fmt.Print("> ")
 	_, _ = buf.ReadBytes('\n')
