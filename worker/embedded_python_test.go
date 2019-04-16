@@ -90,10 +90,14 @@ var _ = Describe("Embedded Python Serverless Function Management", func() {
 			response, err = worker.SendRequest(request)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(response).To(Equal("anotherstring"))
+
+			request = "\"whateverstring\""
+			response, err = worker.SendRequest(request)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(response).To(Equal("whateverstring"))
 		})
 
 		It("can restore and change function", func() {
-			Skip("incomplete")
 			Expect(worker.Activate()).To(Succeed())
 
 			function := "def handle(req):\n  print(req)\n  return req"
@@ -108,26 +112,15 @@ var _ = Describe("Embedded Python Serverless Function Management", func() {
 			worker.AwaitSignal(syscall.SIGUSR2)
 			// time.Sleep(time.Second * 20)
 
-			function = "def handle(req):\n  print(req)\n  return {'new': True}"
+			Expect(worker.Restore()).To(Succeed())
+
+			function = "def handle(req):\n  print(req)\n  return 'unrelated'"
 			Expect(worker.SendFunction(function)).To(Succeed())
-			// c2 := make(chan string, 1)
-			// go func() {
-			// 	function = "def handle(req):\n  print(req)\n  return {'new': True}"
-			// 	err := worker.SendFunction(function)
-			// 	c2 <- fmt.Sprintf("func result: %s", err)
-			// }()
-			//
-			// select {
-			// case res := <-c2:
-			// 	fmt.Println(res)
-			// case <-time.After(3 * time.Second):
-			// 	fmt.Println("timeout 2")
-			// }
 
 			request = "\"anotherstring\""
 			response, err = worker.SendRequest(request)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(response).To(Equal("{\"new\": true}"))
+			Expect(response).To(Equal("unrelated"))
 		})
 	})
 })
