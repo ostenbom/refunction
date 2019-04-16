@@ -297,11 +297,7 @@ func (m *Worker) TakeCheckpoint() error {
 		return err
 	}
 
-	err = state.SavePages("[stack]")
-	if err != nil {
-		return err
-	}
-	err = state.SavePages("[heap]")
+	err = state.SaveWritablePages()
 	if err != nil {
 		return err
 	}
@@ -459,13 +455,9 @@ func (m *Worker) Restore() error {
 
 	start := time.Now()
 
-	err := state.RestoreDirtyPages("[stack]")
+	err := state.RestoreDirtyPages()
 	if err != nil {
 		return fmt.Errorf("could not restore stack: %s", err)
-	}
-	err = state.RestoreDirtyPages("[heap]")
-	if err != nil {
-		return fmt.Errorf("could not restore heap: %s", err)
 	}
 	err = state.RestoreRegs()
 	if err != nil {

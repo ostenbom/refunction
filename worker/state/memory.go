@@ -13,7 +13,10 @@ type Memory struct {
 	startOffset   int64
 	endOffset     int64
 	processOffset int64
-	permissions   string
+	readable      bool
+	writable      bool
+	executable    bool
+	shared        bool
 	majorDevice   int
 	minorDevice   int
 	iNode         int
@@ -76,24 +79,25 @@ func (s *State) getMemory(memoryName string) (*Memory, error) {
 	return memory, nil
 }
 
-func (s *State) SavePages(memoryName string) error {
-	memory, err := s.getMemory(memoryName)
-	if err != nil {
-		return err
-	}
-
-	numBytes := memory.endOffset - memory.startOffset
-	memory.content = make([]byte, numBytes)
-
+func (s *State) SaveWritablePages() error {
 	memoryFile, err := os.OpenFile(fmt.Sprintf("/proc/%d/mem", s.pid), os.O_RDONLY, 0)
 	if err != nil {
 		return fmt.Errorf("could not open /proc/pid/mem: %s", err)
 	}
 	defer memoryFile.Close()
 
-	read, err := memoryFile.ReadAt(memory.content, memory.startOffset)
-	if err != nil || int64(read) != numBytes {
-		return fmt.Errorf("could not read /proc/pid/mem data: %s", err)
+	for _, memory := range s.memoryLocations {
+		if !memory.writable {
+			continue
+		}
+
+		numBytes := memory.endOffset - memory.startOffset
+		memory.content = make([]byte, numBytes)
+
+		read, err := memoryFile.ReadAt(memory.content, memory.startOffset)
+		if err != nil || int64(read) != numBytes {
+			return fmt.Errorf("could not read /proc/pid/mem data: %s", err)
+		}
 	}
 
 	return nil
@@ -132,7 +136,16 @@ func (s *State) MemoryChanged() (bool, error) {
 		if newMem.processOffset != oldMem.processOffset {
 			return true, nil
 		}
-		if newMem.permissions != oldMem.permissions {
+		if newMem.readable != oldMem.readable {
+			return true, nil
+		}
+		if newMem.writable != oldMem.writable {
+			return true, nil
+		}
+		if newMem.executable != oldMem.executable {
+			return true, nil
+		}
+		if newMem.shared != oldMem.shared {
 			return true, nil
 		}
 		if newMem.majorDevice != oldMem.majorDevice {
@@ -149,12 +162,7 @@ func (s *State) MemoryChanged() (bool, error) {
 	return false, nil
 }
 
-func (s *State) RestoreDirtyPages(memoryName string) error {
-	memory, err := s.getMemory(memoryName)
-	if err != nil {
-		return err
-	}
-
+func (s *State) RestoreDirtyPages() error {
 	pagemap, err := os.OpenFile(fmt.Sprintf("/proc/%d/pagemap", s.pid), os.O_RDONLY, os.ModePerm)
 	if err != nil {
 		return fmt.Errorf("could not open pid %d pagemap: %s", s.pid, err)
@@ -167,6 +175,21 @@ func (s *State) RestoreDirtyPages(memoryName string) error {
 	}
 	defer memoryFile.Close()
 
+	for _, memory := range s.memoryLocations {
+		if !memory.writable {
+			continue
+		}
+
+		err := s.singleMemoryRestoreDirtyPages(memory, pagemap, memoryFile)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (s *State) singleMemoryRestoreDirtyPages(memory *Memory, pagemap *os.File, memoryFile *os.File) error {
 	// 64-bit entries
 	pagemapEntrySize := 8
 	pageSize := int64(os.Getpagesize())
@@ -176,7 +199,7 @@ func (s *State) RestoreDirtyPages(memoryName string) error {
 	numPages := endPage - startPage
 	pagemapStartOffset := startPage * int64(pagemapEntrySize)
 
-	_, err = pagemap.Seek(pagemapStartOffset, 0)
+	_, err := pagemap.Seek(pagemapStartOffset, 0)
 	if err != nil {
 		return fmt.Errorf("could not seek pid %d pagemap: %s", s.pid, err)
 	}
@@ -300,7 +323,10 @@ func parseMemoryData(name string, memoryData []string) (*Memory, error) {
 		startOffset:   startOffset,
 		endOffset:     endOffset,
 		processOffset: processOffset,
-		permissions:   memoryData[1],
+		readable:      memoryData[1][0] == 'r',
+		writable:      memoryData[1][1] == 'w',
+		executable:    memoryData[1][2] == 'x',
+		shared:        memoryData[1][3] == 's',
 		majorDevice:   int(majorDevice),
 		minorDevice:   int(minorDevice),
 		iNode:         iNode,

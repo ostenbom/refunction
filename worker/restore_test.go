@@ -58,14 +58,14 @@ var _ = Describe("Worker Restoring", func() {
 				// Get first state
 				state, err := worker.GetState()
 				Expect(err).NotTo(HaveOccurred())
-				Expect(state.SavePages("[stack]")).To(Succeed())
+				Expect(state.SaveWritablePages()).To(Succeed())
 				Expect(worker.ClearMemRefs()).To(Succeed())
 				worker.Continue()
 
 				// Let run, restore
 				time.Sleep(time.Millisecond * 60)
 				Expect(worker.Stop()).To(Succeed())
-				err = state.RestoreDirtyPages("[stack]")
+				err = state.RestoreDirtyPages()
 				Expect(err).NotTo(HaveOccurred())
 				worker.Continue()
 
@@ -115,6 +115,46 @@ var _ = Describe("Worker Restoring", func() {
 			})
 		})
 
+		Context("when the program changes initialized variables", func() {
+			BeforeEach(func() {
+				runtime = "alpine"
+				targetLayer = "forloopinitializedvar"
+			})
+
+			It("can restore the variable", func() {
+				countLocation := getRootfs(worker) + "count.txt"
+				WaitFileExists(countLocation)
+
+				Expect(worker.Attach()).To(Succeed())
+				defer worker.Detach()
+
+				// Work out what will be printed next
+				incrementedLine := CalculateNextCountLine(countLocation)
+
+				// Get first state
+				state, err := worker.GetState()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(state.SaveWritablePages()).To(Succeed())
+				Expect(worker.ClearMemRefs()).To(Succeed())
+				worker.Continue()
+
+				// Let run, restore
+				time.Sleep(time.Millisecond * 60)
+				Expect(worker.Stop()).To(Succeed())
+				err = state.RestoreDirtyPages()
+				Expect(err).NotTo(HaveOccurred())
+				worker.Continue()
+
+				// Let run, check variable was restored
+				time.Sleep(time.Millisecond * 60)
+				Expect(worker.Stop()).To(Succeed())
+				countContent, err := ioutil.ReadFile(countLocation)
+				Expect(err).NotTo(HaveOccurred())
+				numberPrintedIncrements := strings.Count(string(countContent), incrementedLine)
+				Expect(numberPrintedIncrements).To(Equal(2))
+			})
+		})
+
 		Context("when a python program changes stack variables", func() {
 			BeforeEach(func() {
 				runtime = "python"
@@ -141,8 +181,7 @@ var _ = Describe("Worker Restoring", func() {
 				// Get first state
 				state, err := worker.GetState()
 				Expect(err).NotTo(HaveOccurred())
-				Expect(state.SavePages("[stack]")).To(Succeed())
-				Expect(state.SavePages("[heap]")).To(Succeed())
+				Expect(state.SaveWritablePages()).To(Succeed())
 				Expect(worker.ClearMemRefs()).To(Succeed())
 				worker.Continue()
 
@@ -150,8 +189,7 @@ var _ = Describe("Worker Restoring", func() {
 				time.Sleep(time.Millisecond * 60)
 				Expect(worker.Stop()).To(Succeed())
 				start := time.Now()
-				Expect(state.RestoreDirtyPages("[stack]"))
-				Expect(state.RestoreDirtyPages("[heap]"))
+				Expect(state.RestoreDirtyPages()).To(Succeed())
 				Expect(state.RestoreRegs()).To(Succeed())
 				fmt.Printf("restore time: %s\n", time.Since(start))
 				worker.Continue()
