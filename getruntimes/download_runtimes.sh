@@ -6,6 +6,7 @@ scriptdir=$(cd `dirname $0` && pwd)
 declare -a runtimes=(
 		      "alpine"
 		      "python"
+		      "alpinepython"
 		      # "node"
 		    )
 
