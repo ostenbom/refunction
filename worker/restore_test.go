@@ -155,6 +155,46 @@ var _ = Describe("Worker Restoring", func() {
 			})
 		})
 
+		Context("when the program changes uninitialized variables", func() {
+			BeforeEach(func() {
+				runtime = "alpine"
+				targetLayer = "forloopuninitializedvar"
+			})
+
+			It("can restore the variable", func() {
+				countLocation := getRootfs(worker) + "count.txt"
+				WaitFileExists(countLocation)
+
+				Expect(worker.Attach()).To(Succeed())
+				defer worker.Detach()
+
+				// Work out what will be printed next
+				incrementedLine := CalculateNextCountLine(countLocation)
+
+				// Get first state
+				state, err := worker.GetState()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(state.SaveWritablePages()).To(Succeed())
+				Expect(worker.ClearMemRefs()).To(Succeed())
+				worker.Continue()
+
+				// Let run, restore
+				time.Sleep(time.Millisecond * 60)
+				Expect(worker.Stop()).To(Succeed())
+				err = state.RestoreDirtyPages()
+				Expect(err).NotTo(HaveOccurred())
+				worker.Continue()
+
+				// Let run, check variable was restored
+				time.Sleep(time.Millisecond * 60)
+				Expect(worker.Stop()).To(Succeed())
+				countContent, err := ioutil.ReadFile(countLocation)
+				Expect(err).NotTo(HaveOccurred())
+				numberPrintedIncrements := strings.Count(string(countContent), incrementedLine)
+				Expect(numberPrintedIncrements).To(Equal(2))
+			})
+		})
+
 		Context("when a python program changes stack variables", func() {
 			BeforeEach(func() {
 				runtime = "python"
