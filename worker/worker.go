@@ -11,7 +11,6 @@ import (
 	"math/rand"
 	"net"
 	"os"
-	"reflect"
 	"syscall"
 	"time"
 
@@ -151,7 +150,6 @@ func (m *Worker) WithStdPipeCommunication(stderrWriter io.Writer, stdoutWriters 
 			if err != nil {
 				return
 			}
-			fmt.Println(line)
 
 			var data FunctionData
 			err = json.Unmarshal([]byte(line), &data)
@@ -159,12 +157,12 @@ func (m *Worker) WithStdPipeCommunication(stderrWriter io.Writer, stdoutWriters 
 				continue
 			}
 
-			switch v := data.Data.(type) {
-			case string:
-				fmt.Printf("Data is: %s\n", v)
-			default:
-				fmt.Printf("Data was something else: %s\n", reflect.TypeOf(data.Data))
-			}
+			// switch v := data.Data.(type) {
+			// case string:
+			// 	fmt.Printf("Data is: %s\n", v)
+			// default:
+			// 	fmt.Printf("Data was something else: %s\n", reflect.TypeOf(data.Data))
+			// }
 
 			if data.Type == "info" {
 				// fmt.Println(data.Data)

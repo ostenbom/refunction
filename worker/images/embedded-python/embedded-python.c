@@ -35,21 +35,28 @@ void nothing(int sig) {
 
 }
 
+void log_line(char*);
+
 int stdinHasInput()
 {
   struct timeval tv;
   fd_set fds;
   tv.tv_sec = 0;
-  tv.tv_usec = 0;
+  tv.tv_usec = 10000; // 10ms
+
   FD_ZERO(&fds);
   FD_SET(STDIN_FILENO, &fds);
-  select(STDIN_FILENO+1, &fds, NULL, NULL, &tv);
-  return (FD_ISSET(0, &fds));
+  int selectresp = select(1, &fds, NULL, NULL, &tv);
+  if (selectresp < 0) {
+    log_line("bad select response");
+    return -1;
+  }
+
+  return (FD_ISSET(STDIN_FILENO, &fds));
 }
 
 void send_function_loaded();
 void send_response(char*);
-void log_line(char*);
 void error_line(char*);
 cJSON* recv_json();
 
@@ -118,11 +125,7 @@ int main(int argc, char *argv[]) {
 
   start_server();
   while (!server_finish) {
-    if (!stdinHasInput()) {
-      struct timespec readwait;
-      readwait.tv_sec = 0;
-      readwait.tv_nsec = 10000000L; // 10ms
-      nanosleep(&readwait, NULL);
+    if (stdinHasInput() <= 0) {
       continue;
     }
 
@@ -192,8 +195,11 @@ int main(int argc, char *argv[]) {
 
   // Done
   raise(SIGUSR2);
+  struct timespec finishedwait;
+  finishedwait.tv_sec = 0;
+  finishedwait.tv_nsec = 10000000L; // 10ms
   while (1) {
-    raise(SIGUSR1);
+    nanosleep(&finishedwait, NULL);
   }
   /* Py_Finalize(); */
   /* PyMem_RawFree(program); */

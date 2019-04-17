@@ -110,7 +110,6 @@ var _ = Describe("Embedded Python Serverless Function Management", func() {
 
 			Expect(worker.SendSignal(syscall.SIGUSR2)).To(Succeed())
 			worker.AwaitSignal(syscall.SIGUSR2)
-			// time.Sleep(time.Second * 20)
 
 			Expect(worker.Restore()).To(Succeed())
 
