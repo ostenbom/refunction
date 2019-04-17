@@ -66,7 +66,7 @@ func NewWorker(id string, client *containerd.Client, runtime, targetSnapshot str
 		targetSnapshot:         targetSnapshot,
 		runtime:                runtime,
 		communication:          SocketCommunication,
-		responses:              make(chan FunctionData, 1),
+		responses:              make(chan string, 1),
 		functionLoadedMessages: make(chan string, 1),
 		client:                 client,
 		ctx:                    ctx,
@@ -92,7 +92,7 @@ type Worker struct {
 	runtime                string
 	communication          CommunicationType
 	streams                *Streams
-	responses              chan FunctionData
+	responses              chan string
 	functionLoadedMessages chan string
 	client                 *containerd.Client
 	ctx                    context.Context
@@ -115,13 +115,14 @@ type LoadFunctionReq struct {
 	Handler string `json:"handler"`
 }
 
-type FunctionResponse struct {
-	Response string `json:"response"`
+type FunctionData struct {
+	Type string `json:"type"`
+	Data string `json:"data"`
 }
 
-type FunctionData struct {
-	Type string      `json:"type"`
-	Data interface{} `json:"data"`
+type RequestResponse struct {
+	Type string          `json:"type"`
+	Data json.RawMessage `json:"data"`
 }
 
 func (m *Worker) WithStdPipeCommunication(stderrWriter io.Writer, stdoutWriters ...io.Writer) {
@@ -151,7 +152,7 @@ func (m *Worker) WithStdPipeCommunication(stderrWriter io.Writer, stdoutWriters 
 				return
 			}
 
-			var data FunctionData
+			var data RequestResponse
 			err = json.Unmarshal([]byte(line), &data)
 			if err != nil {
 				continue
@@ -167,7 +168,7 @@ func (m *Worker) WithStdPipeCommunication(stderrWriter io.Writer, stdoutWriters 
 			if data.Type == "info" {
 				// fmt.Println(data.Data)
 			} else if data.Type == "response" {
-				m.responses <- data
+				m.responses <- string(data.Data)
 			} else if data.Type == "function_loaded" {
 				m.functionLoadedMessages <- "loaded"
 			}
@@ -364,15 +365,10 @@ func (m *Worker) SendRequest(request string) (string, error) {
 		newLineReq := append(functionReqString, []byte("\n")...)
 		_, err = m.streams.Stdin.Write(newLineReq)
 		if err != nil {
-			return "", nil
+			return "", err
 		}
 
-		resp := <-m.responses
-		switch v := resp.Data.(type) {
-		case string:
-			return v, nil
-		}
-		return "resp not a string", nil
+		return <-m.responses, nil
 	}
 
 	tcpAddr := net.TCPAddr{
@@ -392,14 +388,14 @@ func (m *Worker) SendRequest(request string) (string, error) {
 	}
 
 	decoder := json.NewDecoder(conn)
-	var resp FunctionResponse
+	var resp RequestResponse
 
 	err = decoder.Decode(&resp)
 	if err != nil {
 		return "", fmt.Errorf("could not get request response: %s", err)
 	}
 
-	return resp.Response, nil
+	return string(resp.Data), nil
 }
 
 // AwaitSignal lets the process continue until the desired signal is caught.

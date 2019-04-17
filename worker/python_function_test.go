@@ -76,9 +76,10 @@ var _ = Describe("Python Serverless Function Management", func() {
 			Eventually(stdout).Should(gbytes.Say("starting function server"))
 
 			request := "{\"greatkey\": \"nicevalue\"}"
+			requestInPython := "{'greatkey': 'nicevalue'}"
 			_, err := worker.SendRequest(request)
 			Expect(err).NotTo(HaveOccurred())
-			Eventually(stdout).Should(gbytes.Say(request))
+			Eventually(stdout).Should(gbytes.Say(requestInPython))
 		})
 
 		It("can get a request response", func() {
@@ -90,7 +91,7 @@ var _ = Describe("Python Serverless Function Management", func() {
 			request := "{\"greatkey\": \"nicevalue\"}"
 			response, err := worker.SendRequest(request)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(request).To(Equal(response))
+			Expect(response).To(Equal(request))
 		})
 
 		It("can get several request responses", func() {

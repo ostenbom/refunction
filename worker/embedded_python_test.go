@@ -71,7 +71,19 @@ var _ = Describe("Embedded Python Serverless Function Management", func() {
 			request := "\"jsonstring\""
 			response, err := worker.SendRequest(request)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(response).To(Equal("jsonstring"))
+			Expect(response).To(Equal(request))
+		})
+
+		It("can get an object request response", func() {
+			Expect(worker.Activate()).To(Succeed())
+
+			function := "def handle(req):\n  print(req)\n  return req"
+			Expect(worker.SendFunction(function)).To(Succeed())
+
+			request := "{\"greatkey\":\"nicevalue\"}"
+			response, err := worker.SendRequest(request)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(response).To(Equal(request))
 		})
 
 		It("can get several request responses", func() {
@@ -84,17 +96,17 @@ var _ = Describe("Embedded Python Serverless Function Management", func() {
 			request := "\"jsonstring\""
 			response, err := worker.SendRequest(request)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(response).To(Equal("jsonstring"))
+			Expect(response).To(Equal(request))
 
 			request = "\"anotherstring\""
 			response, err = worker.SendRequest(request)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(response).To(Equal("anotherstring"))
+			Expect(response).To(Equal(request))
 
 			request = "\"whateverstring\""
 			response, err = worker.SendRequest(request)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(response).To(Equal("whateverstring"))
+			Expect(response).To(Equal(request))
 		})
 
 		It("can restore and change function", func() {
@@ -106,7 +118,7 @@ var _ = Describe("Embedded Python Serverless Function Management", func() {
 			request := "\"jsonstring\""
 			response, err := worker.SendRequest(request)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(response).To(Equal("jsonstring"))
+			Expect(response).To(Equal(request))
 
 			Expect(worker.SendSignal(syscall.SIGUSR2)).To(Succeed())
 			worker.AwaitSignal(syscall.SIGUSR2)
@@ -119,7 +131,7 @@ var _ = Describe("Embedded Python Serverless Function Management", func() {
 			request = "\"anotherstring\""
 			response, err = worker.SendRequest(request)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(response).To(Equal("unrelated"))
+			Expect(response).To(Equal("\"unrelated\""))
 		})
 	})
 })

@@ -110,16 +110,8 @@ def startFunctionServer(s):
             print("received request:", request, flush=True)
             response = handle(request)
 
-            response_string = ''
-            try:
-                response_string = json.dumps(response)
-            except ValueError as e:
-                print("could not dump response to json", e, response, flush=True)
-                conn.close()
-                continue
-
-            print("sending response:", response_string, flush=True)
-            conn.send(json.dumps({"response": response_string}).encode("utf-8"))
+            print("sending response:", response, flush=True)
+            conn.send(json.dumps({"type": "response","data": response}).encode("utf-8"))
             conn.recv(1)
             # try:
             #     conn.shutdown(socket.SHUT_RDWR)
