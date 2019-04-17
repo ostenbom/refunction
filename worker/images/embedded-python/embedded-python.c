@@ -78,12 +78,10 @@ int main(int argc, char *argv[]) {
   PyObject *json_module = import_module("json");
   log_line("imported json");
 
-  // TODO: Do this before or after checkpoint??
   PyObject *phandle_func, *pvalue;
-  PyObject *pglobal = PyDict_New();
   PyObject *handle_module = PyModule_New("handler");
   PyModule_AddStringConstant(handle_module, "__file__", "");
-  PyObject *plocal = PyModule_GetDict(handle_module);
+  PyObject *pglobal = PyModule_GetDict(handle_module);
   PyObject *builtins = PyEval_GetBuiltins();
   PyDict_SetItemString(pglobal, "__builtins__", builtins);
 
@@ -99,7 +97,7 @@ int main(int argc, char *argv[]) {
   log_line(handler_string);
 
   /* Load handler function into module */
-  pvalue = PyRun_String(handler_string, Py_file_input, pglobal, plocal);
+  pvalue = PyRun_String(handler_string, Py_file_input, pglobal, pglobal);
   if (pvalue == NULL) {
       if (PyErr_Occurred()) {
         PyErr_Print();

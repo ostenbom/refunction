@@ -133,5 +133,42 @@ var _ = Describe("Embedded Python Serverless Function Management", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(response).To(Equal("\"unrelated\""))
 		})
+
+		It("can load a function with an import from the std library", func() {
+			Expect(worker.Activate()).To(Succeed())
+
+			function := "import math\ndef handle(req):\n  print(req)\n  return math.ceil(req)"
+			Expect(worker.SendFunction(function)).To(Succeed())
+
+			request := "3.5"
+			response, err := worker.SendRequest(request)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(response).To(Equal("4"))
+		})
+
+		It("can load different stdlibrary functions", func() {
+			Expect(worker.Activate()).To(Succeed())
+
+			function := "import math\ndef handle(req):\n  print(req)\n  return math.ceil(req)"
+			Expect(worker.SendFunction(function)).To(Succeed())
+
+			request := "3.5"
+			response, err := worker.SendRequest(request)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(response).To(Equal("4"))
+
+			Expect(worker.SendSignal(syscall.SIGUSR2)).To(Succeed())
+			worker.AwaitSignal(syscall.SIGUSR2)
+
+			Expect(worker.Restore()).To(Succeed())
+
+			function = "import string\ndef handle(req):\n  print(req)\n  return string.ascii_lowercase"
+			Expect(worker.SendFunction(function)).To(Succeed())
+
+			request = "\"dummyanything\""
+			response, err = worker.SendRequest(request)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(response).To(Equal("\"abcdefghijklmnopqrstuvwxyz\""))
+		})
 	})
 })
