@@ -6,9 +6,6 @@ go:
   - 1.11.x
   - tip
 
-env:
-  - CGO_ENABLED=1
-
 matrix:
   allow_failures:
     - go: tip
