@@ -49,6 +49,7 @@ var _ = Describe("Network", func() {
 		})
 
 		It("can get a response", func() {
+			Skip("Does not work on doc vms")
 			Eventually(stdout).Should(gbytes.Say("ttl="))
 		})
 	})
