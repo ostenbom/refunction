@@ -1,10 +1,9 @@
 module github.com/ostenbom/refunction
 
 require (
-	github.com/BurntSushi/toml v0.3.1 // indirect
+	github.com/BurntSushi/toml v0.3.1
 	github.com/Microsoft/go-winio v0.4.11 // indirect
 	github.com/Microsoft/hcsshim v0.7.12 // indirect
-	github.com/burntsushi/toml v0.3.1
 	github.com/containerd/cgroups v0.0.0-20190328223300-4994991857f9 // indirect
 	github.com/containerd/containerd v1.2.0
 	github.com/containerd/continuity v0.0.0-20181001140422-bd77b46c8352 // indirect

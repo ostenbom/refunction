@@ -3,8 +3,11 @@ sudo: required
 
 language: go
 go:
-  - 1.11.9
+  - 1.12.x
   - tip
+
+env:
+  - GO111MODULE=on
 
 matrix:
   allow_failures:
@@ -17,14 +20,13 @@ install:
   - wget https://github.com/containerd/containerd/releases/download/v1.2.2/containerd-1.2.2.linux-amd64.tar.gz
   - tar -xvf containerd-1.2.2.linux-amd64.tar.gz
   - export PATH=$PATH:$PWD/bin/
-  - go get github.com/opencontainers/runc
-  - pushd $GOPATH/src/github.com/opencontainers/runc && make && sudo make install && popd
   - sudo curl -fSL "https://github.com/genuinetools/netns/releases/download/v0.5.3/netns-linux-amd64" -o /usr/local/bin/netns
   - sudo chmod a+x /usr/local/bin/netns
-  - go get -v ./...
-  - go get github.com/onsi/ginkgo/ginkgo
-  - go get github.com/onsi/gomega/...
-  - export PATH=$PATH:$HOME/gopath/bin
+  - pushd $GOPATH && env GO111MODULE=off go get github.com/opencontainers/runc && popd
+  - pushd $GOPATH && env GO111MODULE=off go get github.com/onsi/ginkgo/ginkgo && popd
+  - pushd $GOPATH && env GO111MODULE=off go get github.com/onsi/gomega/... && popd
+  - pushd $GOPATH/src/github.com/opencontainers/runc && make && sudo make install && popd
+  - go build ./...
   - ./getruntimes/download_runtimes.sh
 
 script: sudo env "PATH=$PATH" ginkgo -r --randomizeAllSpecs --randomizeSuites
