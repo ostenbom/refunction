@@ -5,7 +5,6 @@ require (
 	github.com/Microsoft/go-winio v0.4.11 // indirect
 	github.com/Microsoft/hcsshim v0.7.12 // indirect
 	github.com/burntsushi/toml v0.3.1
-	github.com/confluentinc/confluent-kafka-go v1.0.0
 	github.com/containerd/cgroups v0.0.0-20190328223300-4994991857f9 // indirect
 	github.com/containerd/containerd v1.2.0
 	github.com/containerd/continuity v0.0.0-20181001140422-bd77b46c8352 // indirect
@@ -19,14 +18,16 @@ require (
 	github.com/godbus/dbus v4.1.0+incompatible // indirect
 	github.com/gogo/googleapis v1.0.0 // indirect
 	github.com/gogo/protobuf v1.0.0 // indirect
+	github.com/golang/snappy v0.0.1 // indirect
 	github.com/google/go-cmp v0.2.0 // indirect
-	github.com/maxbrunsfeld/counterfeiter/v6 v6.0.2 // indirect
+	github.com/maxbrunsfeld/counterfeiter/v6 v6.0.2
 	github.com/onsi/ginkgo v1.7.0
 	github.com/onsi/gomega v1.5.0
 	github.com/opencontainers/go-digest v0.0.0-20180430190053-c9281466c8b2 // indirect
 	github.com/opencontainers/image-spec v1.0.1 // indirect
 	github.com/opencontainers/runc v0.0.0-20181016192151-58592df56734 // indirect
 	github.com/opencontainers/runtime-spec v0.0.0-20180909173843-eba862dc2470
+	github.com/pierrec/lz4 v2.0.5+incompatible // indirect
 	github.com/pkg/errors v0.8.0 // indirect
 	github.com/seccomp/libseccomp-golang v0.9.0
 	github.com/segmentio/kafka-go v0.2.2
