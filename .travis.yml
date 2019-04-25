@@ -12,10 +12,10 @@ matrix:
 
 before_install:
   - sudo apt-get install -y libseccomp-dev
-
-install:
   - wget -qO - https://packages.confluent.io/deb/5.2/archive.key | sudo apt-key add -
   - sudo add-apt-repository "deb [arch=amd64] https://packages.confluent.io/deb/5.2 stable main"
+
+install:
   - sudo apt-get install -y librdkafka-dev
   - wget https://github.com/containerd/containerd/releases/download/v1.2.2/containerd-1.2.2.linux-amd64.tar.gz
   - tar -xvf containerd-1.2.2.linux-amd64.tar.gz
