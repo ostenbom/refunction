@@ -14,6 +14,9 @@ before_install:
   - sudo apt-get install -y libseccomp-dev
 
 install:
+  - wget -qO - https://packages.confluent.io/deb/5.2/archive.key | sudo apt-key add -
+  - sudo add-apt-repository "deb [arch=amd64] https://packages.confluent.io/deb/5.2 stable main"
+  - sudo apt-get install -y librdkafka-dev
   - wget https://github.com/containerd/containerd/releases/download/v1.2.2/containerd-1.2.2.linux-amd64.tar.gz
   - tar -xvf containerd-1.2.2.linux-amd64.tar.gz
   - export PATH=$PATH:$PWD/bin/
@@ -21,7 +24,7 @@ install:
   - pushd $GOPATH/src/github.com/opencontainers/runc && make && sudo make install && popd
   - sudo curl -fSL "https://github.com/genuinetools/netns/releases/download/v0.5.3/netns-linux-amd64" -o /usr/local/bin/netns
   - sudo chmod a+x /usr/local/bin/netns
-  - go get -t -v ./...
+  - go get -v ./...
   - go get github.com/onsi/ginkgo/ginkgo
   - go get github.com/onsi/gomega/...
   - export PATH=$PATH:$HOME/gopath/bin
