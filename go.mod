@@ -29,6 +29,7 @@ require (
 	github.com/opencontainers/runtime-spec v0.0.0-20180909173843-eba862dc2470
 	github.com/pkg/errors v0.8.0 // indirect
 	github.com/seccomp/libseccomp-golang v0.9.0
+	github.com/segmentio/kafka-go v0.2.2
 	github.com/sirupsen/logrus v1.0.0 // indirect
 	github.com/stretchr/testify v1.3.0 // indirect
 	github.com/syndtr/gocapability v0.0.0-20170704070218-db04d3cc01c8 // indirect

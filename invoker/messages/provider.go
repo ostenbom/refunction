@@ -1,14 +1,14 @@
 package messages
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/confluentinc/confluent-kafka-go/kafka"
+	"github.com/segmentio/kafka-go"
 )
 
 const defaultPartitions = 1
 const defaultReplication = 1
+const defaultNetwork = "tcp"
 
 type MessageProvider interface {
 	EnsureTopic(string) error
@@ -16,49 +16,37 @@ type MessageProvider interface {
 }
 
 type messageProvider struct {
-	adminClient AdminClient
-	producer    Producer
-	consumer    Consumer
+	kafkaConnection KafkaConnection
+	writers         []Writer
+	readers         []Reader
 }
 
-func NewMessageProvider(config *kafka.ConfigMap) (MessageProvider, error) {
-	adminClient, err := NewAdminClient(config)
-	if err != nil {
-		return nil, fmt.Errorf("could not start message provider: %s", err)
-	}
-
-	producer, err := NewProducer(config)
-	if err != nil {
-		return nil, fmt.Errorf("could not start message provider: %s", err)
-	}
-
-	consumer, err := NewConsumer(config)
+func NewMessageProvider(host string) (MessageProvider, error) {
+	kafkaConnection, err := NewKafkaConnection(defaultNetwork, host)
 	if err != nil {
 		return nil, fmt.Errorf("could not start message provider: %s", err)
 	}
 
 	return messageProvider{
-		adminClient: adminClient,
-		producer:    producer,
-		consumer:    consumer,
+		kafkaConnection: kafkaConnection,
+		writers:         []Writer{},
+		readers:         []Reader{},
 	}, nil
 }
 
-func NewFakeProvider(admin AdminClient, producer Producer, consumer Consumer) MessageProvider {
+func NewFakeProvider(conn KafkaConnection) MessageProvider {
 	return messageProvider{
-		adminClient: admin,
-		producer:    producer,
-		consumer:    consumer,
+		kafkaConnection: conn,
 	}
 }
 
 func (p messageProvider) EnsureTopic(topic string) error {
-	topicSpec := kafka.TopicSpecification{
+	topicSpec := kafka.TopicConfig{
 		Topic:             topic,
 		NumPartitions:     defaultPartitions,
 		ReplicationFactor: defaultReplication,
 	}
-	p.adminClient.CreateTopics(context.Background(), []kafka.TopicSpecification{topicSpec})
+	p.kafkaConnection.CreateTopics([]kafka.TopicConfig{topicSpec}...)
 	return nil
 }
 
