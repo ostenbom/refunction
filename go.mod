@@ -20,8 +20,9 @@ require (
 	github.com/gogo/googleapis v1.0.0 // indirect
 	github.com/gogo/protobuf v1.0.0 // indirect
 	github.com/google/go-cmp v0.2.0 // indirect
+	github.com/maxbrunsfeld/counterfeiter/v6 v6.0.2 // indirect
 	github.com/onsi/ginkgo v1.7.0
-	github.com/onsi/gomega v1.4.3
+	github.com/onsi/gomega v1.5.0
 	github.com/opencontainers/go-digest v0.0.0-20180430190053-c9281466c8b2 // indirect
 	github.com/opencontainers/image-spec v1.0.1 // indirect
 	github.com/opencontainers/runc v0.0.0-20181016192151-58592df56734 // indirect
@@ -31,8 +32,7 @@ require (
 	github.com/sirupsen/logrus v1.0.0 // indirect
 	github.com/stretchr/testify v1.3.0 // indirect
 	github.com/syndtr/gocapability v0.0.0-20170704070218-db04d3cc01c8 // indirect
-	golang.org/x/net v0.0.0-20181114220301-adae6a3d119a // indirect
-	golang.org/x/sys v0.0.0-20181122145206-62eef0e2fa9b
+	golang.org/x/sys v0.0.0-20190318195719-6c81ef8f67ca
 	google.golang.org/genproto v0.0.0-20181109154231-b5d43981345b // indirect
 	gotest.tools v2.2.0+incompatible // indirect
 )
