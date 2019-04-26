@@ -10,6 +10,7 @@ import (
 
 type KafkaConnection interface {
 	CreateTopics(...kafka.TopicConfig) error
+	Close() error
 }
 
 type kafkaConnection struct {
@@ -28,4 +29,8 @@ func NewKafkaConnection(network string, host string) (KafkaConnection, error) {
 
 func (c kafkaConnection) CreateTopics(topics ...kafka.TopicConfig) error {
 	return c.conn.CreateTopics(topics...)
+}
+
+func (c kafkaConnection) Close() error {
+	return c.conn.Close()
 }

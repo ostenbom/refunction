@@ -16,6 +16,8 @@ type writer struct {
 	kafkaWriter *kafka.Writer
 }
 
+type NewWriterFunc func(string, string) Writer
+
 func NewWriter(host string, topic string) Writer {
 	kafkaWriter := kafka.NewWriter(kafka.WriterConfig{
 		Brokers: []string{host},

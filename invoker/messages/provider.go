@@ -1,6 +1,7 @@
 package messages
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/segmentio/kafka-go"
@@ -12,13 +13,16 @@ const defaultNetwork = "tcp"
 
 type MessageProvider interface {
 	EnsureTopic(string) error
+	WriteMessage(string, []byte) error
 	Close() error
 }
 
 type messageProvider struct {
 	kafkaConnection KafkaConnection
-	writers         []Writer
-	readers         []Reader
+	host            string
+	writers         map[string]Writer
+	readers         map[string]Reader
+	newWriter       NewWriterFunc
 }
 
 func NewMessageProvider(host string) (MessageProvider, error) {
@@ -29,14 +33,20 @@ func NewMessageProvider(host string) (MessageProvider, error) {
 
 	return messageProvider{
 		kafkaConnection: kafkaConnection,
-		writers:         []Writer{},
-		readers:         []Reader{},
+		host:            host,
+		writers:         make(map[string]Writer),
+		readers:         make(map[string]Reader),
+		newWriter:       NewWriter,
 	}, nil
 }
 
-func NewFakeProvider(conn KafkaConnection) MessageProvider {
+func NewFakeProvider(conn KafkaConnection, writerFunc NewWriterFunc) MessageProvider {
 	return messageProvider{
 		kafkaConnection: conn,
+		host:            "anyhost",
+		writers:         make(map[string]Writer),
+		readers:         make(map[string]Reader),
+		newWriter:       writerFunc,
 	}
 }
 
@@ -46,10 +56,17 @@ func (p messageProvider) EnsureTopic(topic string) error {
 		NumPartitions:     defaultPartitions,
 		ReplicationFactor: defaultReplication,
 	}
-	p.kafkaConnection.CreateTopics([]kafka.TopicConfig{topicSpec}...)
-	return nil
+	return p.kafkaConnection.CreateTopics([]kafka.TopicConfig{topicSpec}...)
+}
+
+func (p messageProvider) WriteMessage(topic string, value []byte) error {
+	writer := p.newWriter(p.host, topic)
+	msg := kafka.Message{
+		Value: value,
+	}
+	return writer.WriteMessages(context.Background(), []kafka.Message{msg}...)
 }
 
 func (p messageProvider) Close() error {
-	return nil
+	return p.kafkaConnection.Close()
 }
