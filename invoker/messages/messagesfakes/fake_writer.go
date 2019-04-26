@@ -10,6 +10,16 @@ import (
 )
 
 type FakeWriter struct {
+	CloseStub        func() error
+	closeMutex       sync.RWMutex
+	closeArgsForCall []struct {
+	}
+	closeReturns struct {
+		result1 error
+	}
+	closeReturnsOnCall map[int]struct {
+		result1 error
+	}
 	WriteMessagesStub        func(context.Context, ...kafka.Message) error
 	writeMessagesMutex       sync.RWMutex
 	writeMessagesArgsForCall []struct {
@@ -24,6 +34,58 @@ type FakeWriter struct {
 	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
+}
+
+func (fake *FakeWriter) Close() error {
+	fake.closeMutex.Lock()
+	ret, specificReturn := fake.closeReturnsOnCall[len(fake.closeArgsForCall)]
+	fake.closeArgsForCall = append(fake.closeArgsForCall, struct {
+	}{})
+	fake.recordInvocation("Close", []interface{}{})
+	fake.closeMutex.Unlock()
+	if fake.CloseStub != nil {
+		return fake.CloseStub()
+	}
+	if specificReturn {
+		return ret.result1
+	}
+	fakeReturns := fake.closeReturns
+	return fakeReturns.result1
+}
+
+func (fake *FakeWriter) CloseCallCount() int {
+	fake.closeMutex.RLock()
+	defer fake.closeMutex.RUnlock()
+	return len(fake.closeArgsForCall)
+}
+
+func (fake *FakeWriter) CloseCalls(stub func() error) {
+	fake.closeMutex.Lock()
+	defer fake.closeMutex.Unlock()
+	fake.CloseStub = stub
+}
+
+func (fake *FakeWriter) CloseReturns(result1 error) {
+	fake.closeMutex.Lock()
+	defer fake.closeMutex.Unlock()
+	fake.CloseStub = nil
+	fake.closeReturns = struct {
+		result1 error
+	}{result1}
+}
+
+func (fake *FakeWriter) CloseReturnsOnCall(i int, result1 error) {
+	fake.closeMutex.Lock()
+	defer fake.closeMutex.Unlock()
+	fake.CloseStub = nil
+	if fake.closeReturnsOnCall == nil {
+		fake.closeReturnsOnCall = make(map[int]struct {
+			result1 error
+		})
+	}
+	fake.closeReturnsOnCall[i] = struct {
+		result1 error
+	}{result1}
 }
 
 func (fake *FakeWriter) WriteMessages(arg1 context.Context, arg2 ...kafka.Message) error {
@@ -90,6 +152,8 @@ func (fake *FakeWriter) WriteMessagesReturnsOnCall(i int, result1 error) {
 func (fake *FakeWriter) Invocations() map[string][][]interface{} {
 	fake.invocationsMutex.RLock()
 	defer fake.invocationsMutex.RUnlock()
+	fake.closeMutex.RLock()
+	defer fake.closeMutex.RUnlock()
 	fake.writeMessagesMutex.RLock()
 	defer fake.writeMessagesMutex.RUnlock()
 	copiedInvocations := map[string][][]interface{}{}

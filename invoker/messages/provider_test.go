@@ -64,5 +64,21 @@ var _ = Describe("Provider", func() {
 			Expect(len(messages)).NotTo(Equal(0))
 			Expect(messages[0].Value).To(Equal([]byte("pommegranite!")))
 		})
+
+		It("reuses the same writer over many writes to the same topic", func() {
+			Expect(provider.WriteMessage("pineapples", []byte{})).To(Succeed())
+			firstWriter := latestWriter
+			Expect(provider.WriteMessage("pineapples", []byte{})).To(Succeed())
+			Expect(firstWriter == latestWriter).To(BeTrue())
+		})
+	})
+
+	Describe("Close", func() {
+		It("closes its writers", func() {
+			Expect(provider.WriteMessage("pineapples", []byte{})).To(Succeed())
+			Expect(provider.Close()).To(Succeed())
+
+			Expect(latestWriter.CloseCallCount()).To(Equal(1))
+		})
 	})
 })

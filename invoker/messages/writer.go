@@ -10,6 +10,7 @@ import (
 
 type Writer interface {
 	WriteMessages(context.Context, ...kafka.Message) error
+	Close() error
 }
 
 type writer struct {
@@ -30,4 +31,8 @@ func NewWriter(host string, topic string) Writer {
 
 func (p writer) WriteMessages(ctx context.Context, messages ...kafka.Message) error {
 	return p.kafkaWriter.WriteMessages(ctx, messages...)
+}
+
+func (p writer) Close() error {
+	return p.kafkaWriter.Close()
 }

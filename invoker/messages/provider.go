@@ -60,13 +60,24 @@ func (p messageProvider) EnsureTopic(topic string) error {
 }
 
 func (p messageProvider) WriteMessage(topic string, value []byte) error {
-	writer := p.newWriter(p.host, topic)
+	writer, exists := p.writers[topic]
+	if !exists {
+		writer = p.newWriter(p.host, topic)
+		p.writers[topic] = writer
+	}
 	msg := kafka.Message{
 		Value: value,
 	}
+
 	return writer.WriteMessages(context.Background(), []kafka.Message{msg}...)
 }
 
 func (p messageProvider) Close() error {
+	for k := range p.writers {
+		err := p.writers[k].Close()
+		if err != nil {
+			return err
+		}
+	}
 	return p.kafkaConnection.Close()
 }
