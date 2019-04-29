@@ -15,6 +15,9 @@ var _ = Describe("Provider", func() {
 		latestWriterHost  string
 		latestWriterTopic string
 		latestWriter      *messagesfakes.FakeWriter
+		latestReaderHost  string
+		latestReaderTopic string
+		latestReader      *messagesfakes.FakeReader
 	)
 
 	BeforeEach(func() {
@@ -25,7 +28,13 @@ var _ = Describe("Provider", func() {
 			latestWriter = new(messagesfakes.FakeWriter)
 			return latestWriter
 		}
-		provider = NewFakeProvider(connection, newWriterFunc)
+		newReaderFunc := func(host string, topic string) Reader {
+			latestReaderHost = host
+			latestReaderTopic = topic
+			latestReader = new(messagesfakes.FakeReader)
+			return latestReader
+		}
+		provider = NewFakeProvider(connection, newWriterFunc, newReaderFunc)
 	})
 
 	Describe("ensuring a topic exists", func() {
@@ -70,6 +79,31 @@ var _ = Describe("Provider", func() {
 			firstWriter := latestWriter
 			Expect(provider.WriteMessage("pineapples", []byte{})).To(Succeed())
 			Expect(firstWriter == latestWriter).To(BeTrue())
+		})
+	})
+
+	Describe("reading messages", func() {
+		It("creates a reader for the given topic", func() {
+			_, err := provider.ReadMessage("pineapples")
+			Expect(err).To(BeNil())
+			Expect(latestReaderHost).To(Equal("anyhost"))
+			Expect(latestReaderTopic).To(Equal("pineapples"))
+			Expect(latestReader).NotTo(BeNil())
+		})
+
+		It("reads from the topic reader", func() {
+			_, err := provider.ReadMessage("pineapples")
+			Expect(err).To(BeNil())
+			Expect(latestReader.ReadMessageCallCount()).To(Equal(1))
+		})
+
+		It("reuses the same reader over many reads to the same topic", func() {
+			_, err := provider.ReadMessage("oranges")
+			Expect(err).To(BeNil())
+			firstReader := latestReader
+			_, err = provider.ReadMessage("oranges")
+			Expect(err).To(BeNil())
+			Expect(firstReader == latestReader).To(BeTrue())
 		})
 	})
 

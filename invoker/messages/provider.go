@@ -14,6 +14,7 @@ const defaultNetwork = "tcp"
 type MessageProvider interface {
 	EnsureTopic(string) error
 	WriteMessage(string, []byte) error
+	ReadMessage(string) ([]byte, error)
 	Close() error
 }
 
@@ -23,6 +24,7 @@ type messageProvider struct {
 	writers         map[string]Writer
 	readers         map[string]Reader
 	newWriter       NewWriterFunc
+	newReader       NewReaderFunc
 }
 
 func NewMessageProvider(host string) (MessageProvider, error) {
@@ -37,16 +39,18 @@ func NewMessageProvider(host string) (MessageProvider, error) {
 		writers:         make(map[string]Writer),
 		readers:         make(map[string]Reader),
 		newWriter:       NewWriter,
+		newReader:       NewReader,
 	}, nil
 }
 
-func NewFakeProvider(conn KafkaConnection, writerFunc NewWriterFunc) MessageProvider {
+func NewFakeProvider(conn KafkaConnection, writerFunc NewWriterFunc, readerFunc NewReaderFunc) MessageProvider {
 	return messageProvider{
 		kafkaConnection: conn,
 		host:            "anyhost",
 		writers:         make(map[string]Writer),
 		readers:         make(map[string]Reader),
 		newWriter:       writerFunc,
+		newReader:       readerFunc,
 	}
 }
 
@@ -72,6 +76,19 @@ func (p messageProvider) WriteMessage(topic string, value []byte) error {
 	return writer.WriteMessages(context.Background(), []kafka.Message{msg}...)
 }
 
+func (p messageProvider) ReadMessage(topic string) ([]byte, error) {
+	reader, exists := p.readers[topic]
+	if !exists {
+		reader = p.newReader(p.host, topic)
+		p.readers[topic] = reader
+	}
+	msg, err := reader.ReadMessage(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("could not read message from topic %s: %s", topic, err)
+	}
+	return msg.Value, nil
+}
+
 func (p messageProvider) Close() error {
 	for k := range p.writers {
 		err := p.writers[k].Close()
@@ -79,5 +96,13 @@ func (p messageProvider) Close() error {
 			return err
 		}
 	}
+
+	for k := range p.readers {
+		err := p.readers[k].Close()
+		if err != nil {
+			return err
+		}
+	}
+
 	return p.kafkaConnection.Close()
 }

@@ -13,11 +13,14 @@ const defaultMaxBytes = 10e6 // 10MB
 
 type Reader interface {
 	ReadMessage(context.Context) (kafka.Message, error)
+	Close() error
 }
 
 type reader struct {
 	kafkaReader *kafka.Reader
 }
+
+type NewReaderFunc func(string, string) Reader
 
 func NewReader(host string, topic string) Reader {
 	kafkaReader := kafka.NewReader(kafka.ReaderConfig{
@@ -35,4 +38,8 @@ func NewReader(host string, topic string) Reader {
 
 func (c reader) ReadMessage(ctx context.Context) (kafka.Message, error) {
 	return c.kafkaReader.ReadMessage(ctx)
+}
+
+func (c reader) Close() error {
+	return c.Close()
 }
