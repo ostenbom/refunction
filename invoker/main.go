@@ -8,10 +8,16 @@ import (
 	"time"
 
 	"github.com/ostenbom/refunction/invoker/messages"
+	"github.com/ostenbom/refunction/invoker/storage"
 )
 
 const healthTopic = "health"
 const twoGigMem = "2147483648 B"
+
+const defaultKafkaAddress = "172.17.0.1:9093"
+const defaultCouchDBAddress = "http://admin:specialsecretpassword@127.0.0.1:5984"
+const defaultActivationDBName = "whisk_local_activations"
+const defaultFunctionDBName = "whisk_local_whisks"
 
 type Ping struct {
 	Name PingName `json:"name"`
@@ -34,32 +40,54 @@ func main() {
 		fmt.Fprintln(os.Stderr, "Invoker must have a unique id assigned greater than 0")
 		os.Exit(1)
 	}
-	invokerNumber := *invokerIDPtr
+	// invokerNumber := *invokerIDPtr
 	invokerID := fmt.Sprintf("invoker%d", *invokerIDPtr)
 	fmt.Printf("Invoker with id: %s starting\n", invokerID)
 
 	// Create/ensure topic for invoker i
-	provider, err := messages.NewMessageProvider("172.17.0.1:9093")
+	messageProvider, err := messages.NewMessageProvider(defaultKafkaAddress)
 	if err != nil {
-		errExit(fmt.Sprintf("could not create message provider: %s", err))
+		errExit(fmt.Errorf("could not create message messageProvider: %s", err))
 	}
-	defer provider.Close()
+	defer messageProvider.Close()
 
-	err = provider.EnsureTopic(invokerID)
+	err = messageProvider.EnsureTopic(invokerID)
 	if err != nil {
-		errExit(fmt.Sprintf("could not ensure invokers topic: %s", err))
+		errExit(fmt.Errorf("could not ensure invokers topic: %s", err))
 	}
 
-	heathStop := startHealthPings(invokerNumber, provider)
-	defer func() {
-		heathStop <- true
-	}()
+	functionStorage, err := storage.NewFunctionStorage(defaultCouchDBAddress, defaultFunctionDBName, defaultActivationDBName)
+	if err != nil {
+		errExit(fmt.Errorf("could not establish couch connection: %s", err))
+	}
 
-	time.Sleep(time.Second * 5)
+	// healthStop := startHealthPings(invokerNumber, provider)
+	// defer func() {
+	// 	healthStop <- true
+	// }()
 
-	// Pull messages from invoker queue
+	for {
+		// Pull messages from invoker queue
+		message, err := messageProvider.ReadMessage(invokerID)
+		if err != nil {
+			errExit(fmt.Errorf("could not pull from invoker queue: %s", err))
+		}
 
-	// Put messages back on completed i queue
+		var activation messages.ActivationMessage
+		err = json.Unmarshal(message, &activation)
+		if err != nil {
+			errExit(fmt.Errorf("could not parse activation message: %s", err))
+		}
+		fmt.Printf("Action name: %s, ActivationID: %s\n", activation.Action.Name, activation.ActivationID)
+
+		// Fetch required function
+		function, err := functionStorage.GetFunction(activation.Action.Path, activation.Action.Name)
+		if err != nil {
+			errExit(fmt.Errorf("could not get activation function: %s", err))
+		}
+
+		fmt.Printf("Function Code: %s\n", function.Executable.Code)
+	}
 
 }
 
@@ -107,7 +135,7 @@ func sendPing(invokerNumber int, provider messages.MessageProvider) error {
 	return nil
 }
 
-func errExit(err string) {
-	fmt.Fprintln(os.Stderr, err)
+func errExit(err error) {
+	fmt.Fprintln(os.Stderr, err.Error())
 	os.Exit(1)
 }

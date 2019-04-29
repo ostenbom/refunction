@@ -15,7 +15,7 @@ require (
 	github.com/docker/go-events v0.0.0-20170721190031-9461782956ad // indirect
 	github.com/docker/go-units v0.4.0 // indirect
 	github.com/flimzy/diff v0.1.5 // indirect
-	github.com/flimzy/kivik v1.8.1 // indirect
+	github.com/flimzy/kivik v1.8.1
 	github.com/flimzy/testy v0.1.16 // indirect
 	github.com/go-kivik/couchdb v1.8.1
 	github.com/go-kivik/kivik v1.8.1

@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/flimzy/kivik"
 	_ "github.com/go-kivik/couchdb" // The CouchDB driver
-	"github.com/go-kivik/kivik"
 )
 
 type Activation struct {
@@ -64,27 +64,29 @@ type FunctionStorage interface {
 }
 
 type functionStorage struct {
-	activationDB *kivik.DB
 	functionDB   *kivik.DB
+	activationDB *kivik.DB
 }
 
-func NewFunctionStorage(host string, activationDBName string, functionDBName string) (FunctionStorage, error) {
+func NewFunctionStorage(host string, functionDBName string, activationDBName string) (FunctionStorage, error) {
 	client, err := kivik.New(context.Background(), "couch", host)
 	if err != nil {
 		return nil, fmt.Errorf("could not establish connection to database: %s", err)
 	}
-	activationDB, err := client.DB(context.Background(), activationDBName)
-	if err != nil {
-		return nil, fmt.Errorf("could not create activationDB connection: %s", err)
-	}
+
 	functionDB, err := client.DB(context.Background(), functionDBName)
 	if err != nil {
 		return nil, fmt.Errorf("could not create functionDB connection: %s", err)
 	}
 
+	activationDB, err := client.DB(context.Background(), activationDBName)
+	if err != nil {
+		return nil, fmt.Errorf("could not create activationDB connection: %s", err)
+	}
+
 	return functionStorage{
-		activationDB: activationDB,
 		functionDB:   functionDB,
+		activationDB: activationDB,
 	}, nil
 }
 

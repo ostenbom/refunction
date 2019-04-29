@@ -6,7 +6,7 @@ import (
 	"github.com/segmentio/kafka-go"
 )
 
-const defaultMinBytes = 10e3 // 10KB
+const defaultMinBytes = 100
 const defaultMaxBytes = 10e6 // 10MB
 
 //go:generate gobin -m -run github.com/maxbrunsfeld/counterfeiter/v6 . Reader

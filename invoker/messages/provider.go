@@ -7,6 +7,35 @@ import (
 	"github.com/segmentio/kafka-go"
 )
 
+type ActivationMessage struct {
+	Action       Action `json:"action"`
+	ActivationID string `json:"activationId"`
+	Blocking     bool   `json:"blocking"`
+	Controller   struct {
+		AsString string `json:"asString"`
+	} `json:"rootControllerIndex"`
+	TransactionID []interface{} `json:"transid"`
+	User          User          `json:"user"`
+}
+
+type Action struct {
+	Name string `json:"name"`
+	Path string `json:"path"`
+}
+
+type User struct {
+	AuthKey struct {
+		APIKey string `json:"api_key"`
+	} `json:"authKey"`
+	Limits    interface{} `json:"limits"`
+	Namespace struct {
+		Name string `json:"name"`
+		UUID string `json:"uuid"`
+	} `json:"namespace"`
+	Rights  []interface{} `json:"rights"`
+	Subject string        `json:"subject"`
+}
+
 const defaultPartitions = 1
 const defaultReplication = 1
 const defaultNetwork = "tcp"
