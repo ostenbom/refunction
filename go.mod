@@ -14,11 +14,17 @@ require (
 	github.com/docker/distribution v0.0.0-20170213194809-b38e5838b7b2 // indirect
 	github.com/docker/go-events v0.0.0-20170721190031-9461782956ad // indirect
 	github.com/docker/go-units v0.4.0 // indirect
+	github.com/flimzy/diff v0.1.5 // indirect
+	github.com/flimzy/kivik v1.8.1 // indirect
+	github.com/flimzy/testy v0.1.16 // indirect
+	github.com/go-kivik/couchdb v1.8.1
+	github.com/go-kivik/kivik v1.8.1
 	github.com/godbus/dbus v4.1.0+incompatible // indirect
 	github.com/gogo/googleapis v1.0.0 // indirect
 	github.com/gogo/protobuf v1.0.0 // indirect
 	github.com/golang/snappy v0.0.1 // indirect
 	github.com/google/go-cmp v0.2.0 // indirect
+	github.com/imdario/mergo v0.3.7 // indirect
 	github.com/maxbrunsfeld/counterfeiter/v6 v6.0.2
 	github.com/onsi/ginkgo v1.7.0
 	github.com/onsi/gomega v1.5.0
