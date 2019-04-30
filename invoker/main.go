@@ -5,10 +5,13 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/ostenbom/refunction/invoker/messages"
 	"github.com/ostenbom/refunction/invoker/storage"
+	"github.com/ostenbom/refunction/invoker/workerpool"
 )
 
 const healthTopic = "health"
@@ -29,7 +32,7 @@ type PingName struct {
 	UserMemory string `json:"userMemory"`
 }
 
-func main() {
+func startInvoker() int {
 
 	// Assign ID from command line arg
 
@@ -37,8 +40,8 @@ func main() {
 	flag.Parse()
 
 	if *invokerIDPtr < 0 {
-		fmt.Fprintln(os.Stderr, "Invoker must have a unique id assigned greater than 0")
-		os.Exit(1)
+		printError(fmt.Errorf("Invoker must have a unique id assigned greater than 0"))
+		return 1
 	}
 	// invokerNumber := *invokerIDPtr
 	invokerID := fmt.Sprintf("invoker%d", *invokerIDPtr)
@@ -47,18 +50,21 @@ func main() {
 	// Create/ensure topic for invoker i
 	messageProvider, err := messages.NewMessageProvider(defaultKafkaAddress)
 	if err != nil {
-		errExit(fmt.Errorf("could not create message messageProvider: %s", err))
+		printError(fmt.Errorf("could not create message messageProvider: %s", err))
+		return 1
 	}
 	defer messageProvider.Close()
 
 	err = messageProvider.EnsureTopic(invokerID)
 	if err != nil {
-		errExit(fmt.Errorf("could not ensure invokers topic: %s", err))
+		printError(fmt.Errorf("could not ensure invokers topic: %s", err))
+		return 1
 	}
 
 	functionStorage, err := storage.NewFunctionStorage(defaultCouchDBAddress, defaultFunctionDBName, defaultActivationDBName)
 	if err != nil {
-		errExit(fmt.Errorf("could not establish couch connection: %s", err))
+		printError(fmt.Errorf("could not establish couch connection: %s", err))
+		return 1
 	}
 
 	// healthStop := startHealthPings(invokerNumber, provider)
@@ -67,33 +73,66 @@ func main() {
 	// }()
 
 	// Start fixed group of workers.
+	workers, err := workerpool.NewWorkerPool(1)
+	if err != nil {
+		printError(err)
+		return 1
+	}
+	defer workers.Close()
+
+	// Graceful stopping in infinite loop
+	stopChan := make(chan os.Signal)
+	signal.Notify(stopChan, syscall.SIGINT)
+	signal.Notify(stopChan, syscall.SIGTERM)
 
 	for {
-		// Pull messages from invoker queue
-		message, err := messageProvider.ReadMessage(invokerID)
-		if err != nil {
-			errExit(fmt.Errorf("could not pull from invoker queue: %s", err))
+		select {
+		case <-stopChan:
+			return 0
+		default:
+			message, err := messageProvider.ReadMessage(invokerID)
+			if err != nil {
+				printError(fmt.Errorf("could not pull from invoker queue: %s", err))
+				return 1
+			}
+			err = consumeMessage(message, functionStorage, workers)
+			if err != nil {
+				printError(fmt.Errorf("could not consume message %s: %s", string(message), err))
+				return 1
+			}
 		}
-
-		var activation messages.ActivationMessage
-		err = json.Unmarshal(message, &activation)
-		if err != nil {
-			errExit(fmt.Errorf("could not parse activation message: %s", err))
-		}
-		fmt.Printf("Action name: %s, ActivationID: %s\n", activation.Action.Name, activation.ActivationID)
-
-		// Fetch required function
-		function, err := functionStorage.GetFunction(activation.Action.Path, activation.Action.Name)
-		if err != nil {
-			errExit(fmt.Errorf("could not get activation function: %s", err))
-		}
-
-		fmt.Printf("Function Code: %s\n", function.Executable.Code)
-
-		// Schedule function
-
-		// Send ack
 	}
+
+	// return 0
+}
+
+func consumeMessage(message []byte, functionStorage storage.FunctionStorage, workers *workerpool.WorkerPool) error {
+	var activation messages.ActivationMessage
+	err := json.Unmarshal(message, &activation)
+	if err != nil {
+		return fmt.Errorf("could not parse activation message: %s", err)
+	}
+	fmt.Printf("Action name: %s, ActivationID: %s\n", activation.Action.Name, activation.ActivationID)
+
+	// Fetch required function
+	function, err := functionStorage.GetFunction(activation.Action.Path, activation.Action.Name)
+	if err != nil {
+		return fmt.Errorf("could not get activation function: %s", err)
+	}
+
+	fmt.Printf("Function Code: %s\n", function.Executable.Code)
+
+	// Schedule function
+
+	// Send ack
+
+	return nil
+}
+
+func main() {
+
+	exitCode := startInvoker()
+	os.Exit(exitCode)
 
 }
 
@@ -141,7 +180,6 @@ func sendPing(invokerNumber int, provider messages.MessageProvider) error {
 	return nil
 }
 
-func errExit(err error) {
+func printError(err error) {
 	fmt.Fprintln(os.Stderr, err.Error())
-	os.Exit(1)
 }
