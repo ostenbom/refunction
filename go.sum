@@ -5,6 +5,8 @@ github.com/Microsoft/go-winio v0.4.11 h1:zoIOcVf0xPN1tnMVbTtEdI+P8OofVk3NObnwOQ6
 github.com/Microsoft/go-winio v0.4.11/go.mod h1:VhR8bwka0BXejwEJY73c50VrPtXAaKcyvVC4A4RozmA=
 github.com/Microsoft/hcsshim v0.7.12 h1:VCjS2UYlYyMfRnCus+yhbJZBi9DeFSMBKrggG/PAeHk=
 github.com/Microsoft/hcsshim v0.7.12/go.mod h1:Op3hHsoHPAvb6lceZHDtd9OkTew38wNoXnJs8iY7rUg=
+github.com/burntsushi/toml v0.3.1 h1:XebFhzi1T+XmBZG9aKnQnA50YOydJUYK7g5SM40w+ik=
+github.com/burntsushi/toml v0.3.1/go.mod h1:tCq67G3LEDB9hykA6+KWl2FPEy0nPcvE8TTBhtOtdGs=
 github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDkc90ppPyw=
 github.com/containerd/cgroups v0.0.0-20190328223300-4994991857f9 h1:LmZz7ns2YaWWJ6m17esVvIMNOfKcw+f/sCneqxKawB4=
 github.com/containerd/cgroups v0.0.0-20190328223300-4994991857f9/go.mod h1:X9rLEHIqSf/wfK8NsPqxJmeZgW4pcfzdXITDrUSJ6uI=

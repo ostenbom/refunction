@@ -133,8 +133,7 @@ var _ = Describe("Worker Manager checkpointing", func() {
 
 				Expect(state.SaveWritablePages()).To(Succeed())
 
-				memSize, err := state.MemorySize("[stack]")
-				Expect(err).NotTo(HaveOccurred())
+				memSize := state.MemorySize()
 				Expect(memSize).NotTo(Equal(0))
 			})
 

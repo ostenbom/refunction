@@ -66,6 +66,8 @@ func main() {
 	// 	healthStop <- true
 	// }()
 
+	// Start fixed group of workers.
+
 	for {
 		// Pull messages from invoker queue
 		message, err := messageProvider.ReadMessage(invokerID)
@@ -87,6 +89,10 @@ func main() {
 		}
 
 		fmt.Printf("Function Code: %s\n", function.Executable.Code)
+
+		// Schedule function
+
+		// Send ack
 	}
 
 }

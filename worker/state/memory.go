@@ -103,13 +103,13 @@ func (s *State) SaveWritablePages() error {
 	return nil
 }
 
-func (s *State) MemorySize(memoryName string) (int, error) {
-	memory, err := s.getMemory(memoryName)
-	if err != nil {
-		return 0, err
+func (s *State) MemorySize() int {
+	total := 0
+	for _, m := range s.memoryLocations {
+		total += len(m.content)
 	}
 
-	return len(memory.content), nil
+	return total
 }
 
 func (s *State) MemoryChanged() (bool, error) {
