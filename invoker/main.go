@@ -43,7 +43,6 @@ func startInvoker() int {
 		printError(fmt.Errorf("Invoker must have a unique id assigned greater than 0"))
 		return 1
 	}
-	// invokerNumber := *invokerIDPtr
 	invokerID := fmt.Sprintf("invoker%d", *invokerIDPtr)
 	fmt.Printf("Invoker with id: %s starting\n", invokerID)
 
@@ -67,7 +66,8 @@ func startInvoker() int {
 		return 1
 	}
 
-	// healthStop := startHealthPings(invokerNumber, provider)
+	// invokerNumber := *invokerIDPtr
+	// healthStop := startHealthPings(invokerNumber, messageProvider)
 	// defer func() {
 	// 	healthStop <- true
 	// }()
@@ -137,6 +137,12 @@ func consumeMessage(message []byte, functionStorage storage.FunctionStorage, wor
 	fmt.Printf("Function Code: %s\n", function.Executable.Code)
 
 	// Schedule function
+	result, err := workers.Run(function, "")
+	if err != nil {
+		return fmt.Errorf("could not run function %s: %s", function.Name, err)
+	}
+
+	fmt.Printf("ran function! Result %s\n", result)
 
 	// Send ack
 

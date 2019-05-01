@@ -31,6 +31,7 @@ func main() {
 
 	os.RemoveAll(runDir)
 	// Ignore errors
+	os.RemoveAll("/var/run/containerd/runc/refunction-worker0")
 	os.RemoveAll("/var/run/containerd/runc/refunction-worker1")
 	os.RemoveAll("/var/run/containerd/runc/refunction-worker2")
 	os.RemoveAll("/var/run/containerd/runc/refunction-worker3")

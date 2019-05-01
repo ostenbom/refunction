@@ -125,12 +125,35 @@ type RequestResponse struct {
 	Data json.RawMessage `json:"data"`
 }
 
-func (m *Worker) WithStdPipeCommunication(stderrWriter io.Writer, stdoutWriters ...io.Writer) {
+func (m *Worker) WithStdPipeCommunicationExtras(stderrWriter io.Writer, stdoutWriters ...io.Writer) {
+	m.withStdPipeCommunication([]io.Writer{stderrWriter}, stdoutWriters)
+}
+
+func (m *Worker) WithStdPipeCommunication() {
+	m.withStdPipeCommunication([]io.Writer{}, []io.Writer{})
+}
+
+func (m *Worker) withStdPipeCommunication(stderrWriters []io.Writer, stdoutWriters []io.Writer) {
 	m.communication = StdPipeCommunication
 	stdinRead, stdinWrite := io.Pipe()
 	stdoutRead, stdoutWrite := io.Pipe()
 	stderrRead, stderrWrite := io.Pipe()
-	m.creator = cio.NewCreator(cio.WithStreams(stdinRead, io.MultiWriter(append(stdoutWriters, stdoutWrite)...), io.MultiWriter(stderrWrite, stderrWriter)))
+
+	var collectedStdErr io.Writer
+	if len(stderrWriters) > 0 {
+		collectedStdErr = io.MultiWriter(append(stderrWriters, stderrWrite)...)
+	} else {
+		collectedStdErr = stderrWrite
+	}
+
+	var collectedStdOut io.Writer
+	if len(stderrWriters) > 0 {
+		collectedStdOut = io.MultiWriter(append(stdoutWriters, stdoutWrite)...)
+	} else {
+		collectedStdOut = stderrWrite
+	}
+
+	m.creator = cio.NewCreator(cio.WithStreams(stdinRead, collectedStdOut, collectedStdErr))
 
 	m.streams = &Streams{
 		Stdin:  stdinWrite,
@@ -423,6 +446,15 @@ func (m *Worker) PauseAtSignal(waitingFor syscall.Signal) {
 
 	m.ptrace.SignalStop <- waitStat
 	return
+}
+
+func (m *Worker) FinishFunction() error {
+	err := m.SendSignal(syscall.SIGUSR2)
+	if err != nil {
+		return fmt.Errorf("could not finish function: %s", err)
+	}
+	m.AwaitSignal(syscall.SIGUSR2)
+	return nil
 }
 
 func (m *Worker) Restore() error {

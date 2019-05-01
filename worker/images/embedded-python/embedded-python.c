@@ -108,7 +108,7 @@ int main(int argc, char *argv[]) {
   Py_DECREF(pvalue);
   cJSON_Delete(function_json);
 
-  phandle_func = PyObject_GetAttrString(handle_module, "handle");
+  phandle_func = PyObject_GetAttrString(handle_module, "main");
 
   if (!phandle_func || !PyCallable_Check(phandle_func)) {
       if (PyErr_Occurred()) {

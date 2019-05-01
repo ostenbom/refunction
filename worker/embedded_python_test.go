@@ -30,7 +30,7 @@ var _ = Describe("Embedded Python Serverless Function Management", func() {
 		worker, err = NewWorker(id, client, runtime, targetLayer)
 		Expect(err).NotTo(HaveOccurred())
 		stdout = gbytes.NewBuffer()
-		worker.WithStdPipeCommunication(GinkgoWriter, stdout, GinkgoWriter)
+		worker.WithStdPipeCommunicationExtras(GinkgoWriter, stdout, GinkgoWriter)
 
 		straceBuffer = gbytes.NewBuffer()
 		multiBuffer := io.MultiWriter(straceBuffer, GinkgoWriter)
@@ -57,15 +57,15 @@ var _ = Describe("Embedded Python Serverless Function Management", func() {
 			Eventually(stdout).Should(gbytes.Say("python started"))
 			Eventually(stdout).Should(gbytes.Say("post checkpoint"))
 
-			function := "def handle(req):\n  print(req)\n  return req"
+			function := "def main(req):\n  print(req)\n  return req"
 			Expect(worker.SendFunction(function)).To(Succeed())
-			Eventually(stdout).Should(gbytes.Say("handle function successfully loaded"))
+			Eventually(stdout).Should(gbytes.Say("main function successfully loaded"))
 		})
 
 		It("can get a request response", func() {
 			Expect(worker.Activate()).To(Succeed())
 
-			function := "def handle(req):\n  print(req)\n  return req"
+			function := "def main(req):\n  print(req)\n  return req"
 			Expect(worker.SendFunction(function)).To(Succeed())
 
 			request := "\"jsonstring\""
@@ -77,7 +77,7 @@ var _ = Describe("Embedded Python Serverless Function Management", func() {
 		It("can get an object request response", func() {
 			Expect(worker.Activate()).To(Succeed())
 
-			function := "def handle(req):\n  print(req)\n  return req"
+			function := "def main(req):\n  print(req)\n  return req"
 			Expect(worker.SendFunction(function)).To(Succeed())
 
 			request := "{\"greatkey\":\"nicevalue\"}"
@@ -89,9 +89,9 @@ var _ = Describe("Embedded Python Serverless Function Management", func() {
 		It("can get several request responses", func() {
 			Expect(worker.Activate()).To(Succeed())
 
-			function := "def handle(req):\n  print(req)\n  return req"
+			function := "def main(req):\n  print(req)\n  return req"
 			Expect(worker.SendFunction(function)).To(Succeed())
-			Eventually(stdout).Should(gbytes.Say("handle function successfully loaded"))
+			Eventually(stdout).Should(gbytes.Say("main function successfully loaded"))
 
 			request := "\"jsonstring\""
 			response, err := worker.SendRequest(request)
@@ -112,7 +112,7 @@ var _ = Describe("Embedded Python Serverless Function Management", func() {
 		It("can restore and change function", func() {
 			Expect(worker.Activate()).To(Succeed())
 
-			function := "def handle(req):\n  print(req)\n  return req"
+			function := "def main(req):\n  print(req)\n  return req"
 			Expect(worker.SendFunction(function)).To(Succeed())
 
 			request := "\"jsonstring\""
@@ -125,7 +125,7 @@ var _ = Describe("Embedded Python Serverless Function Management", func() {
 
 			Expect(worker.Restore()).To(Succeed())
 
-			function = "def handle(req):\n  print(req)\n  return 'unrelated'"
+			function = "def main(req):\n  print(req)\n  return 'unrelated'"
 			Expect(worker.SendFunction(function)).To(Succeed())
 
 			request = "\"anotherstring\""
@@ -137,7 +137,7 @@ var _ = Describe("Embedded Python Serverless Function Management", func() {
 		It("can load a function with an import from the std library", func() {
 			Expect(worker.Activate()).To(Succeed())
 
-			function := "import math\ndef handle(req):\n  print(req)\n  return math.ceil(req)"
+			function := "import math\ndef main(req):\n  print(req)\n  return math.ceil(req)"
 			Expect(worker.SendFunction(function)).To(Succeed())
 
 			request := "3.5"
@@ -149,7 +149,7 @@ var _ = Describe("Embedded Python Serverless Function Management", func() {
 		It("can load different stdlibrary functions", func() {
 			Expect(worker.Activate()).To(Succeed())
 
-			function := "import math\ndef handle(req):\n  print(req)\n  return math.ceil(req)"
+			function := "import math\ndef main(req):\n  print(req)\n  return math.ceil(req)"
 			Expect(worker.SendFunction(function)).To(Succeed())
 
 			request := "3.5"
@@ -162,7 +162,7 @@ var _ = Describe("Embedded Python Serverless Function Management", func() {
 
 			Expect(worker.Restore()).To(Succeed())
 
-			function = "import string\ndef handle(req):\n  print(req)\n  return string.ascii_lowercase"
+			function = "import string\ndef main(req):\n  print(req)\n  return string.ascii_lowercase"
 			Expect(worker.SendFunction(function)).To(Succeed())
 
 			request = "\"dummyanything\""

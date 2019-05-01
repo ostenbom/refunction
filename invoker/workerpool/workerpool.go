@@ -23,11 +23,12 @@ const defaultRuntime = "alpinepython"
 const defaultTarget = "embedded-python"
 
 type WorkerPool struct {
-	workers []*worker.Worker
-	server  *exec.Cmd
-	client  *containerd.Client
-	config  containerdrunner.Config
-	runDir  string
+	workers   []*worker.Worker
+	server    *exec.Cmd
+	client    *containerd.Client
+	config    containerdrunner.Config
+	runDir    string
+	scheduler *Scheduler
 }
 
 func NewWorkerPool(size int) (*WorkerPool, error) {
@@ -64,15 +65,30 @@ func NewWorkerPool(size int) (*WorkerPool, error) {
 		if err != nil {
 			return nil, fmt.Errorf("could not start worker in pool: %s", err)
 		}
+		w.WithStdPipeCommunication()
 		workers[i] = w
 	}
 
+	for _, w := range workers {
+		err := w.Start()
+		if err != nil {
+			return nil, fmt.Errorf("could not start worker: %s", err)
+		}
+		err = w.Activate()
+		if err != nil {
+			return nil, fmt.Errorf("could not activate worker: %s", err)
+		}
+	}
+
+	scheduler := NewScheduler(workers)
+
 	return &WorkerPool{
-		workers: workers,
-		server:  server,
-		client:  client,
-		config:  config,
-		runDir:  runDir,
+		workers:   workers,
+		server:    server,
+		client:    client,
+		config:    config,
+		runDir:    runDir,
+		scheduler: scheduler,
 	}, nil
 }
 
@@ -225,7 +241,7 @@ func downloadLayer(layerName, workDir string) error {
 		return fmt.Errorf("layer %s could not be donwnloaded/did not exist", layerName)
 	}
 
-	_, err = io.Copy(out, resp.Body)
+	_, err = io.Copy(out, reader)
 	return err
 }
 
