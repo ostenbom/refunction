@@ -41,5 +41,5 @@ func (c reader) ReadMessage(ctx context.Context) (kafka.Message, error) {
 }
 
 func (c reader) Close() error {
-	return c.Close()
+	return c.kafkaReader.Close()
 }

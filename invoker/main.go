@@ -80,26 +80,40 @@ func startInvoker() int {
 	}
 	defer workers.Close()
 
-	// Graceful stopping in infinite loop
-	stopChan := make(chan os.Signal)
-	signal.Notify(stopChan, syscall.SIGINT)
-	signal.Notify(stopChan, syscall.SIGTERM)
+	stopChan := make(chan os.Signal, 1)
+	signal.Notify(stopChan, syscall.SIGINT, syscall.SIGTERM)
 
+	messageChan := make(chan []byte)
+	errorChan := make(chan error)
+
+	go func() {
+		for {
+			message, err := messageProvider.ReadMessage(invokerID)
+			if err != nil {
+				errorChan <- fmt.Errorf("could not pull from invoker queue: %s", err)
+				return
+			}
+			messageChan <- message
+		}
+	}()
+
+	// Graceful stopping in infinite loop
 	for {
 		select {
 		case <-stopChan:
+			fmt.Println("shutting down")
 			return 0
-		default:
-			message, err := messageProvider.ReadMessage(invokerID)
-			if err != nil {
-				printError(fmt.Errorf("could not pull from invoker queue: %s", err))
-				return 1
-			}
+		case message := <-messageChan:
 			err = consumeMessage(message, functionStorage, workers)
 			if err != nil {
 				printError(fmt.Errorf("could not consume message %s: %s", string(message), err))
 				return 1
 			}
+		case err := <-errorChan:
+			printError(err)
+			return 1
+		default:
+			time.Sleep(time.Millisecond * 100)
 		}
 	}
 
@@ -130,10 +144,8 @@ func consumeMessage(message []byte, functionStorage storage.FunctionStorage, wor
 }
 
 func main() {
-
 	exitCode := startInvoker()
 	os.Exit(exitCode)
-
 }
 
 func startHealthPings(invokerNumber int, provider messages.MessageProvider) chan bool {

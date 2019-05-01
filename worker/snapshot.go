@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/containerd/containerd"
@@ -17,24 +18,30 @@ import (
 )
 
 func NewSnapshotManager(ctx context.Context, client *containerd.Client, runtime string) (*SnapshotManager, error) {
+	cacheDir := "/var/cache/refunction"
+	// If running tests..
 	workDir, err := os.Getwd()
 	if err != nil {
-		return nil, fmt.Errorf("could not get working directory: %s", err)
+		return nil, err
+	}
+	if strings.Contains(workDir, "refunction/worker") {
+		cacheDir = workDir
 	}
 
 	opt := snapshots.WithLabels(map[string]string{
 		"containerd.io/gc.root": time.Now().UTC().Format(time.RFC3339),
 	})
 
+	layersPath := fmt.Sprintf("%s/activelayers", cacheDir)
 	manager := SnapshotManager{
 		runtime:     runtime,
 		ctx:         ctx,
-		layersPath:  fmt.Sprintf("%s/activelayers", workDir),
+		layersPath:  layersPath,
 		snapshotter: client.SnapshotService("overlayfs"),
 		noGc:        opt,
 	}
 
-	err = manager.ensureRuntimeBase(workDir)
+	err = manager.ensureRuntimeBase(cacheDir)
 	if err != nil {
 		return nil, fmt.Errorf("could not create runtime base: %s", err)
 	}
