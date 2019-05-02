@@ -9,16 +9,22 @@ import (
 )
 
 type Activation struct {
-	ID           string       `json:"_id"`
-	Revision     string       `json:"_rev"`
-	ActivationID string       `json:"activationId"`
-	Annotations  []Annotation `json:"annotations"`
-	Name         string       `json:"name"`
-	Namespace    string       `json:"namespace"`
-	Response     Response     `json:"response"`
-	Start        int          `json:"start"`
-	End          int          `json:"end"`
-	Subject      string       `json:"subject"`
+	ID           string        `json:"_id"`
+	Revision     string        `json:"_rev"`
+	ActivationID string        `json:"activationId"`
+	Annotations  []Annotation  `json:"annotations"`
+	Name         string        `json:"name"`
+	Namespace    string        `json:"namespace"`
+	Response     Response      `json:"response"`
+	Start        int           `json:"start"`
+	End          int           `json:"end"`
+	Duration     int           `json:"duration"`
+	Subject      string        `json:"subject"`
+	EntityType   string        `json:"entityType"`
+	Logs         []interface{} `json:"logs"`
+	Publish      bool          `json:"publish"`
+	Updated      int           `json:"updated"`
+	Version      string        `json:"version"`
 }
 
 type Response struct {
@@ -36,6 +42,7 @@ type Function struct {
 	Limits      Limits        `json:"limits"`
 	Parameters  []interface{} `json:"parameters"`
 	Annotations []Annotation  `json:"annotations"`
+	EntityType  string        `json:"entityType"`
 	Publish     bool          `json:"publish"`
 	Updated     int           `json:"updated"`
 	Version     string        `json:"version"`

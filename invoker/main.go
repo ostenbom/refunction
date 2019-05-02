@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -15,23 +14,9 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const healthTopic = "health"
-const twoGigMem = "2147483648 B"
-
-const defaultKafkaAddress = "172.17.0.1:9093"
 const defaultCouchDBAddress = "http://admin:specialsecretpassword@127.0.0.1:5984"
 const defaultActivationDBName = "whisk_local_activations"
 const defaultFunctionDBName = "whisk_local_whisks"
-
-type Ping struct {
-	Name PingName `json:"name"`
-}
-
-type PingName struct {
-	Instance   int    `json:"instance"`
-	UniqueName string `json:"uniqueName"`
-	UserMemory string `json:"userMemory"`
-}
 
 func startInvoker() int {
 
@@ -47,21 +32,15 @@ func startInvoker() int {
 	invokerID := fmt.Sprintf("invoker%d", *invokerIDPtr)
 	log.Info(fmt.Sprintf("Invoker with id: %s starting", invokerID))
 
-	// Create/ensure topic for invoker i
-	messageProvider, err := messages.NewMessageProvider(defaultKafkaAddress)
+	invokerNumber := *invokerIDPtr
+	messenger, err := messages.NewMessenger(invokerNumber)
 	if err != nil {
-		printError(fmt.Errorf("could not create message messageProvider: %s", err))
+		printError(err)
 		return 1
 	}
-	defer messageProvider.Close()
+	defer messenger.Close()
 
-	err = messageProvider.EnsureTopic(invokerID)
-	if err != nil {
-		printError(fmt.Errorf("could not ensure invokers topic: %s", err))
-		return 1
-	}
-
-	log.Debug("Message provider initialized")
+	log.Debug("Messenger initialized")
 
 	functionStorage, err := storage.NewFunctionStorage(defaultCouchDBAddress, defaultFunctionDBName, defaultActivationDBName)
 	if err != nil {
@@ -71,11 +50,10 @@ func startInvoker() int {
 
 	log.Debug("Function storage connected")
 
-	// invokerNumber := *invokerIDPtr
-	// healthStop := startHealthPings(invokerNumber, messageProvider)
-	// defer func() {
-	// 	healthStop <- true
-	// }()
+	healthStop := messenger.StartHealthPings(invokerNumber)
+	defer func() {
+		healthStop <- true
+	}()
 
 	// Start fixed group of workers.
 	workers, err := workerpool.NewWorkerPool(1)
@@ -90,12 +68,12 @@ func startInvoker() int {
 	stopChan := make(chan os.Signal, 1)
 	signal.Notify(stopChan, syscall.SIGINT, syscall.SIGTERM)
 
-	messageChan := make(chan []byte)
+	messageChan := make(chan *messages.ActivationMessage)
 	errorChan := make(chan error)
 
 	go func() {
 		for {
-			message, err := messageProvider.ReadMessage(invokerID)
+			message, err := messenger.GetActivation()
 			if err != nil {
 				errorChan <- fmt.Errorf("could not pull from invoker queue: %s", err)
 				return
@@ -111,9 +89,10 @@ func startInvoker() int {
 			log.Info("Shutting Down")
 			return 0
 		case message := <-messageChan:
+			// TODO: non-blocking
 			err = consumeMessage(message, functionStorage, workers)
 			if err != nil {
-				printError(fmt.Errorf("could not consume message %s: %s", string(message), err))
+				printError(fmt.Errorf("could not consume message %s: %s", message.Action.Name, err))
 				return 1
 			}
 		case err := <-errorChan:
@@ -127,18 +106,7 @@ func startInvoker() int {
 	// return 0
 }
 
-func consumeMessage(message []byte, functionStorage storage.FunctionStorage, workers *workerpool.WorkerPool) error {
-	var activation messages.ActivationMessage
-	err := json.Unmarshal(message, &activation)
-	if err != nil {
-		return fmt.Errorf("could not parse activation message: %s", err)
-	}
-
-	log.WithFields(log.Fields{
-		"name": activation.Action.Name,
-		"ID":   activation.ActivationID,
-	}).Debug("received activation message")
-
+func consumeMessage(activation *messages.ActivationMessage, functionStorage storage.FunctionStorage, workers *workerpool.WorkerPool) error {
 	// Fetch required function
 	function, err := functionStorage.GetFunction(activation.Action.Path, activation.Action.Name)
 	if err != nil {
@@ -172,50 +140,6 @@ func init() {
 func main() {
 	exitCode := startInvoker()
 	os.Exit(exitCode)
-}
-
-func startHealthPings(invokerNumber int, provider messages.MessageProvider) chan bool {
-	stop := make(chan bool)
-	go func() {
-		for {
-			select {
-			default:
-				go func() {
-					err := sendPing(invokerNumber, provider)
-					if err != nil {
-						fmt.Fprintf(os.Stderr, "health ping failure: %s", err)
-					}
-				}()
-				time.Sleep(time.Second)
-			case <-stop:
-				return
-			}
-		}
-	}()
-
-	return stop
-}
-
-func sendPing(invokerNumber int, provider messages.MessageProvider) error {
-	msg := Ping{
-		Name: PingName{
-			Instance:   invokerNumber,
-			UniqueName: fmt.Sprintf("%d", invokerNumber),
-			UserMemory: twoGigMem,
-		},
-	}
-
-	msgBytes, err := json.Marshal(msg)
-	if err != nil {
-		return fmt.Errorf("could not marshal ping message: %s", err)
-	}
-
-	err = provider.WriteMessage("health", msgBytes)
-	if err != nil {
-		return fmt.Errorf("could not send ping message: %s", err)
-	}
-
-	return nil
 }
 
 func printError(err error) {
