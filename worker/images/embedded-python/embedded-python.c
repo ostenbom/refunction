@@ -121,6 +121,10 @@ int main(int argc, char *argv[]) {
   log_line("handle function successfully loaded");
   send_function_loaded();
 
+  PyObject *pjson_loads, *pjson_dumps;
+  pjson_loads = PyObject_GetAttrString(json_module, "loads");
+  pjson_dumps = PyObject_GetAttrString(json_module, "dumps");
+
   start_server();
   while (!server_finish) {
     if (stdinHasInput() <= 0) {
@@ -134,20 +138,20 @@ int main(int argc, char *argv[]) {
     log_line(request_data_string);
 
     // json.loads(request)
-    PyObject *pjson_request, *pjson_call_args, *pjson_loads, *prequest;
+    PyObject *pjson_request, *pjson_load_args, *prequest;
     pjson_request = PyUnicode_FromString(request_data_string);
-    pjson_call_args = PyTuple_New(1);
-    PyTuple_SetItem(pjson_call_args, 0, pjson_request);
+    pjson_load_args = PyTuple_New(1);
+    // Never forget that SetItem steals the reference
+    PyTuple_SetItem(pjson_load_args, 0, pjson_request);
 
-    pjson_loads = PyObject_GetAttrString(json_module, "loads");
-    prequest = PyObject_CallObject(pjson_loads, pjson_call_args);
-    Py_XDECREF(pjson_loads);
+    prequest = PyObject_CallObject(pjson_loads, pjson_load_args);
     if (prequest == NULL) {
       log_line("failure when loading request json");
       PyErr_Print();
       fflush(stderr);
       exit(1);
     }
+    Py_DECREF(pjson_load_args);
 
     log_line("json loaded");
 
@@ -165,15 +169,23 @@ int main(int argc, char *argv[]) {
       fflush(stderr);
       exit(1);
     }
+    Py_DECREF(phandle_args);
 
-    log_line("handle called");
+    log_line("handle call complete");
+
+    PyObject_Print(presponse, stdout, 0);
 
     // json.dumps(response)
-    PyObject *pjson_response, *pjson_dumps;
-    pjson_dumps = PyObject_GetAttrString(json_module, "dumps");
-    PyTuple_SetItem(pjson_call_args, 0, presponse);
-    pjson_response = PyObject_CallObject(pjson_dumps, pjson_call_args);
-    Py_XDECREF(pjson_dumps);
+    PyObject *pjson_response, *pjson_dump_args;
+    pjson_dump_args = PyTuple_New(1);
+    log_line("get attr string");
+    PyTuple_SetItem(pjson_dump_args, 0, presponse);
+    log_line("set item");
+    pjson_response = PyObject_CallObject(pjson_dumps, pjson_dump_args);
+    PyObject_Print(pjson_response, stdout, 0);
+    log_line("call obj");
+    Py_DECREF(pjson_dump_args);
+
 
     log_line("json dumped");
 
@@ -182,12 +194,10 @@ int main(int argc, char *argv[]) {
     send_response(PyBytes_AsString(ascii_response));
 
     Py_DECREF(ascii_response);
-    Py_DECREF(presponse);
     Py_DECREF(pjson_response);
-    Py_DECREF(phandle_args);
-    Py_DECREF(pjson_call_args);
-    Py_DECREF(pjson_request);
   }
+  Py_XDECREF(pjson_loads);
+  Py_XDECREF(pjson_dumps);
 
   log_line("finished server");
 
