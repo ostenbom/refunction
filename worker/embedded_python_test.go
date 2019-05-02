@@ -59,7 +59,7 @@ var _ = Describe("Embedded Python Serverless Function Management", func() {
 
 			function := "def main(req):\n  print(req)\n  return req"
 			Expect(worker.SendFunction(function)).To(Succeed())
-			Eventually(stdout).Should(gbytes.Say("main function successfully loaded"))
+			Eventually(stdout).Should(gbytes.Say("handle function successfully loaded"))
 		})
 
 		It("can get a request response", func() {
@@ -91,7 +91,7 @@ var _ = Describe("Embedded Python Serverless Function Management", func() {
 
 			function := "def main(req):\n  print(req)\n  return req"
 			Expect(worker.SendFunction(function)).To(Succeed())
-			Eventually(stdout).Should(gbytes.Say("main function successfully loaded"))
+			Eventually(stdout).Should(gbytes.Say("handle function successfully loaded"))
 
 			request := "\"jsonstring\""
 			response, err := worker.SendRequest(request)
