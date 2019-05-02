@@ -10,14 +10,15 @@ import (
 	"github.com/ostenbom/refunction/worker"
 )
 
-const decomissionTime = time.Second
+const defaultDecommissionTime = time.Second
 
 type Scheduler struct {
-	workers    map[string]*ScheduleWorker
-	undeployed []string
-	deployed   []string
-	running    []string
-	mux        sync.Mutex
+	workers          map[string]*ScheduleWorker
+	undeployed       []string
+	deployed         []string
+	running          []string
+	mux              sync.Mutex
+	decommissionTime time.Duration
 }
 
 type ScheduleWorker struct {
@@ -38,32 +39,45 @@ func NewScheduler(workers []*worker.Worker) *Scheduler {
 	}
 
 	return &Scheduler{
-		workers:    scheduleWorkers,
-		undeployed: undeployed,
+		workers:          scheduleWorkers,
+		undeployed:       undeployed,
+		decommissionTime: defaultDecommissionTime,
+	}
+}
+
+func NewFakeScheduler(workers map[string]*ScheduleWorker, undeployed []string, decommissionTime time.Duration) *Scheduler {
+	return &Scheduler{
+		workers:          workers,
+		undeployed:       undeployed,
+		decommissionTime: decommissionTime,
 	}
 }
 
 func (p *WorkerPool) Run(function *storage.Function, request string) (string, error) {
 	fmt.Println(function)
-	schedulable, exists := p.scheduler.getDeployedFunction(function.ID)
+	name, schedulable, exists := p.scheduler.RunDeployedFunction(function.ID)
 	if exists {
-		schedulable.runTime = time.Now()
-		return schedulable.worker.SendRequest(request)
+		schedulable.MarkRunTime()
+		result, err := schedulable.worker.SendRequest(request)
+		p.scheduler.RunComplete(name)
+		return result, err
 	}
 
 	p.scheduler.mux.Lock()
 	if len(p.scheduler.undeployed) > 0 {
-		name, schedulable := p.scheduler.runUndeployed()
+		name, schedulable := p.scheduler.RunUndeployed()
 		p.scheduler.mux.Unlock()
 		fmt.Printf("chose %s to run func", name)
 		schedulable.worker.SendFunction(function.Executable.Code)
 		fmt.Println("function sent")
-		schedulable.runTime = time.Now()
+		// TODO: Set after request response?
+		schedulable.MarkRunTime()
 		result, err := schedulable.worker.SendRequest(request)
 		fmt.Println("result obtained")
-		p.scheduler.runComplete(name)
+		schedulable.SetFunction(function.ID)
+		p.scheduler.RunComplete(name)
 		fmt.Println("run complete")
-		p.scheduler.scheduleDecommission(name, schedulable)
+		p.scheduler.ScheduleDecommission(name, schedulable)
 		fmt.Println("scheduled decomission")
 		// Schedule decomission
 		return result, err
@@ -73,25 +87,27 @@ func (p *WorkerPool) Run(function *storage.Function, request string) (string, er
 	}
 }
 
-func (s *Scheduler) getDeployedFunction(f string) (*ScheduleWorker, bool) {
+func (s *Scheduler) RunDeployedFunction(f string) (string, *ScheduleWorker, bool) {
 	s.mux.Lock()
 	defer s.mux.Unlock()
-	for _, d := range s.deployed {
-		if s.workers[d].function == f {
-			return s.workers[d], true
+	for i, d := range s.deployed {
+		if s.workers[d].GetFunction() == f {
+			s.deployed = append(s.deployed[:i], s.deployed[i+1:]...)
+			s.running = append(s.running, d)
+			return d, s.workers[d], true
 		}
 	}
-	return nil, false
+	return "", nil, false
 }
 
-func (s *Scheduler) runUndeployed() (string, *ScheduleWorker) {
+func (s *Scheduler) RunUndeployed() (string, *ScheduleWorker) {
 	var next string
 	next, s.undeployed = s.undeployed[0], s.undeployed[1:]
 	s.running = append(s.running, next)
 	return next, s.workers[next]
 }
 
-func (s *Scheduler) runComplete(name string) {
+func (s *Scheduler) RunComplete(name string) {
 	s.mux.Lock()
 	defer s.mux.Unlock()
 	var nameIndex int
@@ -105,11 +121,11 @@ func (s *Scheduler) runComplete(name string) {
 	s.deployed = append(s.deployed, name)
 }
 
-func (s *Scheduler) scheduleDecommission(name string, schedulable *ScheduleWorker) {
+func (s *Scheduler) ScheduleDecommission(name string, schedulable *ScheduleWorker) {
 	go func() {
 		for {
-			time.Sleep(decomissionTime)
-			if time.Since(schedulable.runTime) >= decomissionTime {
+			time.Sleep(s.decommissionTime)
+			if time.Since(schedulable.runTime) >= s.decommissionTime {
 				s.mux.Lock()
 				nameIndex := -1
 				for i, w := range s.deployed {
@@ -127,12 +143,7 @@ func (s *Scheduler) scheduleDecommission(name string, schedulable *ScheduleWorke
 				s.deployed = append(s.deployed[:nameIndex], s.deployed[nameIndex+1:]...)
 				s.mux.Unlock()
 
-				err := schedulable.worker.FinishFunction()
-				if err != nil {
-					fmt.Fprintln(os.Stderr, err.Error())
-					return
-				}
-				err = schedulable.worker.Restore()
+				err := schedulable.Decomission()
 				if err != nil {
 					fmt.Fprintln(os.Stderr, err.Error())
 					return
@@ -146,4 +157,56 @@ func (s *Scheduler) scheduleDecommission(name string, schedulable *ScheduleWorke
 
 		}
 	}()
+}
+
+func (sw *ScheduleWorker) Decomission() error {
+	// Testing
+	if sw.worker == nil {
+		return nil
+	}
+
+	err := sw.worker.FinishFunction()
+	if err != nil {
+		return err
+	}
+	err = sw.worker.Restore()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (sw *ScheduleWorker) MarkRunTime() {
+	sw.runTime = time.Now()
+}
+
+func (sw *ScheduleWorker) SetFunction(f string) {
+	sw.function = f
+}
+
+func (sw *ScheduleWorker) GetFunction() string {
+	return sw.function
+}
+
+// Functions for testing
+
+func (s *Scheduler) DeployedWorkers() []string {
+	s.mux.Lock()
+	defer s.mux.Unlock()
+	d := append([]string{}, s.deployed...)
+	return d
+}
+
+func (s *Scheduler) UndeployedWorkers() []string {
+	s.mux.Lock()
+	defer s.mux.Unlock()
+	d := append([]string{}, s.undeployed...)
+	return d
+}
+
+func (s *Scheduler) RunningWorkers() []string {
+	s.mux.Lock()
+	defer s.mux.Unlock()
+	d := append([]string{}, s.running...)
+	return d
 }
