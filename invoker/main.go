@@ -12,6 +12,7 @@ import (
 	"github.com/ostenbom/refunction/invoker/messages"
 	"github.com/ostenbom/refunction/invoker/storage"
 	"github.com/ostenbom/refunction/invoker/workerpool"
+	log "github.com/sirupsen/logrus"
 )
 
 const healthTopic = "health"
@@ -44,7 +45,7 @@ func startInvoker() int {
 		return 1
 	}
 	invokerID := fmt.Sprintf("invoker%d", *invokerIDPtr)
-	fmt.Printf("Invoker with id: %s starting\n", invokerID)
+	log.Info(fmt.Sprintf("Invoker with id: %s starting", invokerID))
 
 	// Create/ensure topic for invoker i
 	messageProvider, err := messages.NewMessageProvider(defaultKafkaAddress)
@@ -60,11 +61,15 @@ func startInvoker() int {
 		return 1
 	}
 
+	log.Debug("Message provider initialized")
+
 	functionStorage, err := storage.NewFunctionStorage(defaultCouchDBAddress, defaultFunctionDBName, defaultActivationDBName)
 	if err != nil {
 		printError(fmt.Errorf("could not establish couch connection: %s", err))
 		return 1
 	}
+
+	log.Debug("Function storage connected")
 
 	// invokerNumber := *invokerIDPtr
 	// healthStop := startHealthPings(invokerNumber, messageProvider)
@@ -79,6 +84,8 @@ func startInvoker() int {
 		return 1
 	}
 	defer workers.Close()
+
+	log.Info("Invoker initialized")
 
 	stopChan := make(chan os.Signal, 1)
 	signal.Notify(stopChan, syscall.SIGINT, syscall.SIGTERM)
@@ -101,7 +108,7 @@ func startInvoker() int {
 	for {
 		select {
 		case <-stopChan:
-			fmt.Println("shutting down")
+			log.Info("Shutting Down")
 			return 0
 		case message := <-messageChan:
 			err = consumeMessage(message, functionStorage, workers)
@@ -126,7 +133,11 @@ func consumeMessage(message []byte, functionStorage storage.FunctionStorage, wor
 	if err != nil {
 		return fmt.Errorf("could not parse activation message: %s", err)
 	}
-	fmt.Printf("Action name: %s, ActivationID: %s\n", activation.Action.Name, activation.ActivationID)
+
+	log.WithFields(log.Fields{
+		"name": activation.Action.Name,
+		"ID":   activation.ActivationID,
+	}).Debug("received activation message")
 
 	// Fetch required function
 	function, err := functionStorage.GetFunction(activation.Action.Path, activation.Action.Name)
@@ -134,19 +145,28 @@ func consumeMessage(message []byte, functionStorage storage.FunctionStorage, wor
 		return fmt.Errorf("could not get activation function: %s", err)
 	}
 
-	fmt.Printf("Function Code: %s\n", function.Executable.Code)
+	log.WithFields(log.Fields{
+		"code": function.Executable.Code,
+	}).Debug("fetched function")
 
 	// Schedule function
-	result, err := workers.Run(function, "")
+	result, err := workers.Run(function, "{}")
 	if err != nil {
 		return fmt.Errorf("could not run function %s: %s", function.Name, err)
 	}
 
-	fmt.Printf("ran function! Result %s\n", result)
+	log.WithFields(log.Fields{
+		"result": result,
+	}).Debug("function run complete")
 
 	// Send ack
 
 	return nil
+}
+
+func init() {
+	log.SetOutput(os.Stdout)
+	log.SetLevel(log.DebugLevel)
 }
 
 func main() {

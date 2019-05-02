@@ -8,6 +8,7 @@ import (
 
 	"github.com/ostenbom/refunction/invoker/storage"
 	"github.com/ostenbom/refunction/worker"
+	log "github.com/sirupsen/logrus"
 )
 
 const defaultDecommissionTime = time.Second
@@ -54,11 +55,20 @@ func NewFakeScheduler(workers map[string]*ScheduleWorker, undeployed []string, d
 }
 
 func (p *WorkerPool) Run(function *storage.Function, request string) (string, error) {
-	fmt.Println(function)
+	functionLogger := log.WithFields(log.Fields{
+		"request":      request,
+		"functionID":   function.ID,
+		"functionName": function.Name,
+	})
 	name, schedulable, exists := p.scheduler.RunDeployedFunction(function.ID)
 	if exists {
 		schedulable.MarkRunTime()
+
+		functionLogger = functionLogger.WithFields(log.Fields{"worker": name})
+		functionLogger.Debug("running on deployed worker")
 		result, err := schedulable.worker.SendRequest(request)
+		functionLogger.WithFields(log.Fields{"result": result}).Debug("response received")
+
 		p.scheduler.RunComplete(name)
 		return result, err
 	}
@@ -67,19 +77,19 @@ func (p *WorkerPool) Run(function *storage.Function, request string) (string, er
 	if len(p.scheduler.undeployed) > 0 {
 		name, schedulable := p.scheduler.RunUndeployed()
 		p.scheduler.mux.Unlock()
-		fmt.Printf("chose %s to run func", name)
+
+		functionLogger = functionLogger.WithFields(log.Fields{"worker": name})
+		functionLogger.Debug("loading function")
 		schedulable.worker.SendFunction(function.Executable.Code)
-		fmt.Println("function sent")
+		functionLogger.Debug("sending request")
 		// TODO: Set after request response?
 		schedulable.MarkRunTime()
 		result, err := schedulable.worker.SendRequest(request)
-		fmt.Println("result obtained")
+		functionLogger.WithFields(log.Fields{"result": result}).Debug("response received")
+
 		schedulable.SetFunction(function.ID)
 		p.scheduler.RunComplete(name)
-		fmt.Println("run complete")
 		p.scheduler.ScheduleDecommission(name, schedulable)
-		fmt.Println("scheduled decomission")
-		// Schedule decomission
 		return result, err
 	} else {
 		p.scheduler.mux.Unlock()

@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	sec "github.com/seccomp/libseccomp-golang"
+	log "github.com/sirupsen/logrus"
 )
 
 func (m *Worker) Attach() error {
@@ -60,6 +61,7 @@ func (m *Worker) ptraceLoop() error {
 				m.ptrace.Error <- fmt.Errorf("error waiting for child: %s", err)
 				break
 			}
+			log.Debug("child waited for")
 
 			if !waitStat.Stopped() {
 				// TODO: Continue here?
@@ -85,7 +87,13 @@ func (m *Worker) ptraceLoop() error {
 				enteringSyscall = !enteringSyscall
 			} else {
 				m.ptrace.SignalStop <- waitStat
+				log.WithFields(log.Fields{
+					"StopSignal": waitStat.StopSignal(),
+					"ExitSignal": waitStat.ExitStatus(),
+					"Signal":     waitStat.Signal(),
+				}).Debug("awaiting continue orders")
 				continuePtrace, err := m.awaitContinueOrders()
+				log.Debug("completed wait")
 				if !continuePtrace {
 					if err != nil {
 						m.ptrace.Error <- err

@@ -26,6 +26,7 @@ require (
 	github.com/golang/snappy v0.0.1 // indirect
 	github.com/google/go-cmp v0.2.0 // indirect
 	github.com/imdario/mergo v0.3.7 // indirect
+	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
 	github.com/maxbrunsfeld/counterfeiter/v6 v6.0.2
 	github.com/onsi/ginkgo v1.7.0
 	github.com/onsi/gomega v1.5.0
@@ -37,10 +38,10 @@ require (
 	github.com/pkg/errors v0.8.0 // indirect
 	github.com/seccomp/libseccomp-golang v0.9.0
 	github.com/segmentio/kafka-go v0.2.2
-	github.com/sirupsen/logrus v1.0.0 // indirect
-	github.com/stretchr/testify v1.3.0 // indirect
+	github.com/sirupsen/logrus v1.4.1
+	github.com/stretchr/objx v0.2.0 // indirect
 	github.com/syndtr/gocapability v0.0.0-20170704070218-db04d3cc01c8 // indirect
-	golang.org/x/sys v0.0.0-20190318195719-6c81ef8f67ca
+	golang.org/x/sys v0.0.0-20190429190828-d89cdac9e872
 	google.golang.org/genproto v0.0.0-20181109154231-b5d43981345b // indirect
 	gotest.tools v2.2.0+incompatible // indirect
 )

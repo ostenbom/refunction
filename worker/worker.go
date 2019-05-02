@@ -22,6 +22,7 @@ import (
 	"github.com/containerd/containerd/oci"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	. "github.com/ostenbom/refunction/worker/state"
+	log "github.com/sirupsen/logrus"
 )
 
 const RuntimeStartedSignal = syscall.SIGUSR2
@@ -150,7 +151,7 @@ func (m *Worker) withStdPipeCommunication(stderrWriters []io.Writer, stdoutWrite
 	if len(stderrWriters) > 0 {
 		collectedStdOut = io.MultiWriter(append(stdoutWriters, stdoutWrite)...)
 	} else {
-		collectedStdOut = stderrWrite
+		collectedStdOut = stdoutWrite
 	}
 
 	m.creator = cio.NewCreator(cio.WithStreams(stdinRead, collectedStdOut, collectedStdErr))
@@ -187,6 +188,8 @@ func (m *Worker) withStdPipeCommunication(stderrWriters []io.Writer, stdoutWrite
 			// default:
 			// 	fmt.Printf("Data was something else: %s\n", reflect.TypeOf(data.Data))
 			// }
+
+			log.Debug(string(data.Data))
 
 			if data.Type == "info" {
 				// fmt.Println(data.Data)
