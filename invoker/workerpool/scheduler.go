@@ -80,7 +80,11 @@ func (p *WorkerPool) Run(function *types.FunctionDoc, request string) (string, e
 
 		functionLogger = functionLogger.WithFields(log.Fields{"worker": name})
 		functionLogger.Debug("loading function")
-		schedulable.worker.SendFunction(function.Executable.Code)
+		functionCode, err := function.CodeString()
+		if err != nil {
+			return "", err
+		}
+		schedulable.worker.SendFunction(functionCode)
 		functionLogger.Debug("sending request")
 		// TODO: Set after request response?
 		schedulable.MarkRunTime()

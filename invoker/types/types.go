@@ -1,5 +1,10 @@
 package types
 
+import (
+	"encoding/base64"
+	"fmt"
+)
+
 type Name struct {
 	Instance   int    `json:"instance"`
 	UniqueName string `json:"uniqueName"`
@@ -97,8 +102,31 @@ type FunctionDoc struct {
 }
 
 type Executable struct {
-	Kind string `json:"kind"`
-	Code string `json:"code"`
+	Kind string      `json:"kind"`
+	Code interface{} `json:"code"`
+}
+
+func (f *FunctionDoc) CodeString() (string, error) {
+	var functionCode string
+	switch v := f.Executable.Code.(type) {
+	case string:
+		functionCode = v
+	case map[string]interface{}:
+		attachment := v["attachmentName"]
+		attachmentString, ok := attachment.(string)
+		if !ok {
+			return "", fmt.Errorf("attachment code was not string: %s", v)
+		}
+		b64code := attachmentString[4:] // mem:b64encodedcode
+		functionBytes, err := base64.StdEncoding.DecodeString(b64code)
+		if err != nil {
+			return "", fmt.Errorf("could not decode function %s: %s", v, err)
+		}
+		functionCode = string(functionBytes)
+	default:
+		return "", fmt.Errorf("function code not in expected type: %s", f.Executable)
+	}
+	return functionCode, nil
 }
 
 type Limits struct {
