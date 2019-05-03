@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ostenbom/refunction/invoker/storage"
+	"github.com/ostenbom/refunction/invoker/types"
 	"github.com/ostenbom/refunction/worker"
 	log "github.com/sirupsen/logrus"
 )
@@ -54,7 +54,7 @@ func NewFakeScheduler(workers map[string]*ScheduleWorker, undeployed []string, d
 	}
 }
 
-func (p *WorkerPool) Run(function *storage.Function, request string) (string, error) {
+func (p *WorkerPool) Run(function *types.FunctionDoc, request string) (string, error) {
 	functionLogger := log.WithFields(log.Fields{
 		"request":      request,
 		"functionID":   function.ID,

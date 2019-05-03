@@ -26,6 +26,7 @@ func NewReader(host string, topic string) Reader {
 	kafkaReader := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:   []string{host},
 		Topic:     topic,
+		GroupID:   topic,
 		Partition: 0,
 		MinBytes:  defaultMinBytes,
 		MaxBytes:  defaultMaxBytes,

@@ -10,6 +10,7 @@ import (
 
 	"github.com/ostenbom/refunction/invoker/messages"
 	"github.com/ostenbom/refunction/invoker/storage"
+	"github.com/ostenbom/refunction/invoker/types"
 	"github.com/ostenbom/refunction/invoker/workerpool"
 	log "github.com/sirupsen/logrus"
 )
@@ -68,7 +69,7 @@ func startInvoker() int {
 	stopChan := make(chan os.Signal, 1)
 	signal.Notify(stopChan, syscall.SIGINT, syscall.SIGTERM)
 
-	messageChan := make(chan *messages.ActivationMessage)
+	messageChan := make(chan *types.ActivationMessage)
 	errorChan := make(chan error)
 
 	go func() {
@@ -90,7 +91,7 @@ func startInvoker() int {
 			return 0
 		case message := <-messageChan:
 			// TODO: non-blocking
-			err = consumeMessage(message, functionStorage, workers)
+			err = consumeMessage(message, functionStorage, workers, messenger)
 			if err != nil {
 				printError(fmt.Errorf("could not consume message %s: %s", message.Action.Name, err))
 				return 1
@@ -106,7 +107,7 @@ func startInvoker() int {
 	// return 0
 }
 
-func consumeMessage(activation *messages.ActivationMessage, functionStorage storage.FunctionStorage, workers *workerpool.WorkerPool) error {
+func consumeMessage(activation *types.ActivationMessage, functionStorage storage.FunctionStorage, workers *workerpool.WorkerPool, messenger *messages.Messenger) error {
 	// Fetch required function
 	function, err := functionStorage.GetFunction(activation.Action.Path, activation.Action.Name)
 	if err != nil {
@@ -128,6 +129,20 @@ func consumeMessage(activation *messages.ActivationMessage, functionStorage stor
 	}).Debug("function run complete")
 
 	// Send ack
+
+	go func() {
+		err := messenger.SendCompletion(activation, function, result)
+		if err != nil {
+			log.Error(fmt.Errorf("could not send completion %s, %s: %s", function.Name, activation.ActivationID, err))
+		}
+	}()
+
+	go func() {
+		err := functionStorage.StoreActivation(activation, function, result)
+		if err != nil {
+			log.Error(fmt.Errorf("could not store activation %s, %s: %s", function.Name, activation.ActivationID, err))
+		}
+	}()
 
 	return nil
 }

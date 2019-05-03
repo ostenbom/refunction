@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ostenbom/refunction/invoker/types"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -13,19 +14,14 @@ const healthTopic = "health"
 const twoGigMem = "2147483648 B"
 
 type Ping struct {
-	Name PingName `json:"name"`
-}
-
-type PingName struct {
-	Instance   int    `json:"instance"`
-	UniqueName string `json:"uniqueName"`
-	UserMemory string `json:"userMemory"`
+	Name types.Name `json:"name"`
 }
 
 type Messenger struct {
 	provider      MessageProvider
 	invokerNumber int
 	invokerTopic  string
+	name          types.Name
 }
 
 func NewMessenger(invokerNumber int) (*Messenger, error) {
@@ -42,16 +38,21 @@ func NewMessenger(invokerNumber int) (*Messenger, error) {
 		provider:      provider,
 		invokerNumber: invokerNumber,
 		invokerTopic:  invokerTopic,
+		name: types.Name{
+			Instance:   invokerNumber,
+			UniqueName: fmt.Sprintf("%d", invokerNumber),
+			UserMemory: twoGigMem,
+		},
 	}, nil
 }
 
-func (m *Messenger) GetActivation() (*ActivationMessage, error) {
+func (m *Messenger) GetActivation() (*types.ActivationMessage, error) {
 	rawMessage, err := m.provider.ReadMessage(m.invokerTopic)
 	if err != nil {
 		return nil, fmt.Errorf("could not pull from invoker queue: %s", err)
 	}
 
-	var activation ActivationMessage
+	var activation types.ActivationMessage
 	err = json.Unmarshal(rawMessage, &activation)
 	if err != nil {
 		return nil, fmt.Errorf("could not parse activation message: %s", err)
@@ -63,6 +64,23 @@ func (m *Messenger) GetActivation() (*ActivationMessage, error) {
 	}).Debug("received activation message")
 
 	return &activation, nil
+}
+
+func (m *Messenger) SendCompletion(activation *types.ActivationMessage, function *types.FunctionDoc, result string) error {
+	controllerTopic := fmt.Sprintf("completed%s", activation.Controller.AsString)
+
+	completion := types.CompletionMessage{
+		ActivationID:  activation.ActivationID,
+		Invoker:       m.name,
+		SystemError:   false,
+		TransactionID: activation.TransactionID,
+	}
+
+	rawCompletion, err := json.Marshal(completion)
+	if err != nil {
+		return fmt.Errorf("could not marshal completion message: %s", err)
+	}
+	return m.provider.WriteMessage(controllerTopic, rawCompletion)
 }
 
 func (m *Messenger) StartHealthPings(invokerNumber int) chan bool {
@@ -89,11 +107,7 @@ func (m *Messenger) StartHealthPings(invokerNumber int) chan bool {
 
 func (m *Messenger) sendPing(invokerNumber int) error {
 	msg := Ping{
-		Name: PingName{
-			Instance:   invokerNumber,
-			UniqueName: fmt.Sprintf("%d", invokerNumber),
-			UserMemory: twoGigMem,
-		},
+		Name: m.name,
 	}
 
 	msgBytes, err := json.Marshal(msg)

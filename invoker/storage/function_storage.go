@@ -2,72 +2,19 @@ package storage
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/flimzy/kivik"
 	_ "github.com/go-kivik/couchdb" // The CouchDB driver
+	"github.com/ostenbom/refunction/invoker/types"
+	log "github.com/sirupsen/logrus"
 )
 
-type Activation struct {
-	ID           string        `json:"_id"`
-	Revision     string        `json:"_rev"`
-	ActivationID string        `json:"activationId"`
-	Annotations  []Annotation  `json:"annotations"`
-	Name         string        `json:"name"`
-	Namespace    string        `json:"namespace"`
-	Response     Response      `json:"response"`
-	Start        int           `json:"start"`
-	End          int           `json:"end"`
-	Duration     int           `json:"duration"`
-	Subject      string        `json:"subject"`
-	EntityType   string        `json:"entityType"`
-	Logs         []interface{} `json:"logs"`
-	Publish      bool          `json:"publish"`
-	Updated      int           `json:"updated"`
-	Version      string        `json:"version"`
-}
-
-type Response struct {
-	Result     interface{} `json:"result"`
-	StatusCode int         `json:"statusCode"`
-}
-
-type Function struct {
-	ID          string        `json:"_id"`
-	Revision    string        `json:"_rev"`
-	Name        string        `json:"name"`
-	Namespace   string        `json:"namespace"`
-	Executable  Executable    `json:"exec"`
-	Binary      bool          `json:"binary"`
-	Limits      Limits        `json:"limits"`
-	Parameters  []interface{} `json:"parameters"`
-	Annotations []Annotation  `json:"annotations"`
-	EntityType  string        `json:"entityType"`
-	Publish     bool          `json:"publish"`
-	Updated     int           `json:"updated"`
-	Version     string        `json:"version"`
-}
-
-type Executable struct {
-	Kind string `json:"kind"`
-	Code string `json:"code"`
-}
-
-type Limits struct {
-	Concurrency int `json:"concurrency"`
-	Logs        int `json:"logs"`
-	Memory      int `json:"memory"`
-	Timeout     int `json:"timeout"`
-}
-
-type Annotation struct {
-	Key   string      `json:"key"`
-	Value interface{} `json:"value"`
-}
-
 type FunctionStorage interface {
-	GetFunction(path string, name string) (*Function, error)
-	StoreActivation(Activation) error
+	GetFunction(path string, name string) (*types.FunctionDoc, error)
+	StoreActivation(*types.ActivationMessage, *types.FunctionDoc, string) error
 }
 
 type functionStorage struct {
@@ -97,14 +44,14 @@ func NewFunctionStorage(host string, functionDBName string, activationDBName str
 	}, nil
 }
 
-func (s functionStorage) GetFunction(path string, name string) (*Function, error) {
+func (s functionStorage) GetFunction(path string, name string) (*types.FunctionDoc, error) {
 	fullDocID := fmt.Sprintf("%s/%s", path, name)
 	row, err := s.functionDB.Get(context.Background(), fullDocID)
 	if err != nil {
 		return nil, fmt.Errorf("could not fetch database function %s: %s", fullDocID, err)
 	}
 
-	var function Function
+	var function types.FunctionDoc
 	err = row.ScanDoc(&function)
 	if err != nil {
 		return nil, fmt.Errorf("could not parse database function %s: %s", fullDocID, err)
@@ -112,6 +59,45 @@ func (s functionStorage) GetFunction(path string, name string) (*Function, error
 	return &function, nil
 }
 
-func (s functionStorage) StoreActivation(activation Activation) error {
-	return nil
+func (s functionStorage) StoreActivation(activationMessage *types.ActivationMessage, function *types.FunctionDoc, result string) error {
+	docID := fmt.Sprintf("%s/%s", function.Namespace, activationMessage.ActivationID)
+
+	var resultObject map[string]interface{}
+	err := json.Unmarshal([]byte(result), &resultObject)
+	if err != nil {
+		return fmt.Errorf("could not Unmarshal result to object: %s", err)
+	}
+
+	logs := make([]interface{}, 0)
+	activation := types.ActivationDoc{
+		ID:      docID,
+		Updated: int(time.Now().Unix()),
+		Response: types.Response{
+			ActivationID: activationMessage.ActivationID,
+			Annotations:  function.Annotations,
+			Name:         function.Name,
+			Namespace:    function.Namespace,
+			Response: types.ResponseValue{
+				Result:     resultObject,
+				StatusCode: 0,
+			},
+			Start:      int(time.Now().Unix()),
+			End:        int(time.Now().Unix() + 2),
+			Duration:   5,
+			Subject:    activationMessage.User.Subject,
+			EntityType: "activation",
+			Logs:       logs,
+			Publish:    function.Publish,
+			Version:    function.Version,
+		},
+	}
+
+	activationsJSON, err := json.Marshal(&activation)
+	if err != nil {
+		return fmt.Errorf("could not marshal activation: %s", err)
+	}
+	log.Debug(string(activationsJSON))
+
+	_, err = s.activationDB.Put(context.Background(), docID, activation)
+	return err
 }
