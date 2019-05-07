@@ -21,8 +21,9 @@ type NewWriterFunc func(string, string) Writer
 
 func NewWriter(host string, topic string) Writer {
 	kafkaWriter := kafka.NewWriter(kafka.WriterConfig{
-		Brokers: []string{host},
-		Topic:   topic,
+		Brokers:   []string{host},
+		Topic:     topic,
+		BatchSize: 1,
 	})
 	return &writer{
 		kafkaWriter: kafkaWriter,

@@ -21,8 +21,6 @@ const defaultFunctionDBName = "whisk_local_whisks"
 
 func startInvoker() int {
 
-	// Assign ID from command line arg
-
 	invokerIDPtr := flag.Int("id", -1, "unique id for the invoker")
 	flag.Parse()
 
@@ -57,7 +55,7 @@ func startInvoker() int {
 	}()
 
 	// Start fixed group of workers.
-	workers, err := workerpool.NewWorkerPool(1)
+	workers, err := workerpool.NewWorkerPool(4)
 	if err != nil {
 		printError(err)
 		return 1
@@ -90,12 +88,12 @@ func startInvoker() int {
 			log.Info("Shutting Down")
 			return 0
 		case message := <-messageChan:
-			// TODO: non-blocking
-			err = consumeMessage(message, functionStorage, workers, messenger)
-			if err != nil {
-				printError(fmt.Errorf("could not consume message %s: %s", message.Action.Name, err))
-				return 1
-			}
+			go func() {
+				err = consumeMessage(message, functionStorage, workers, messenger)
+				if err != nil {
+					log.Error(err)
+				}
+			}()
 		case err := <-errorChan:
 			printError(err)
 			return 1
@@ -114,7 +112,12 @@ func consumeMessage(activation *types.ActivationMessage, functionStorage storage
 		return fmt.Errorf("could not get activation function: %s", err)
 	}
 
-	log.WithFields(log.Fields{
+	messageLogger := log.WithFields(log.Fields{
+		"ID":   activation.ActivationID,
+		"name": function.Name,
+	})
+
+	messageLogger.WithFields(log.Fields{
 		"code": function.Executable.Code,
 	}).Debug("fetched function")
 
@@ -124,7 +127,7 @@ func consumeMessage(activation *types.ActivationMessage, functionStorage storage
 		return fmt.Errorf("could not run function %s: %s", function.Name, err)
 	}
 
-	log.WithFields(log.Fields{
+	messageLogger.WithFields(log.Fields{
 		"result": result,
 	}).Debug("function run complete")
 
@@ -135,6 +138,7 @@ func consumeMessage(activation *types.ActivationMessage, functionStorage storage
 			if err != nil {
 				log.Errorf("could not send result %s, %s: %s", function.Name, activation.ActivationID, err)
 			}
+			messageLogger.Debug("result sent")
 		}()
 	}
 
@@ -143,6 +147,7 @@ func consumeMessage(activation *types.ActivationMessage, functionStorage storage
 		if err != nil {
 			log.Error(fmt.Errorf("could not send completion %s, %s: %s", function.Name, activation.ActivationID, err))
 		}
+		messageLogger.Debug("completion sent")
 	}()
 
 	go func() {
@@ -150,12 +155,17 @@ func consumeMessage(activation *types.ActivationMessage, functionStorage storage
 		if err != nil {
 			log.Error(fmt.Errorf("could not store activation %s, %s: %s", function.Name, activation.ActivationID, err))
 		}
+		messageLogger.Debug("activation stored")
 	}()
 
 	return nil
 }
 
 func init() {
+	log.SetFormatter(&log.TextFormatter{
+		FullTimestamp:   true,
+		TimestampFormat: time.StampMilli,
+	})
 	log.SetOutput(os.Stdout)
 	log.SetLevel(log.DebugLevel)
 }
