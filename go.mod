@@ -25,6 +25,7 @@ require (
 	github.com/gogo/protobuf v1.0.0 // indirect
 	github.com/golang/snappy v0.0.1 // indirect
 	github.com/google/go-cmp v0.2.0 // indirect
+	github.com/hashicorp/golang-lru v0.5.1
 	github.com/imdario/mergo v0.3.7 // indirect
 	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
 	github.com/maxbrunsfeld/counterfeiter/v6 v6.0.2
