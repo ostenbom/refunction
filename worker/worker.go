@@ -613,7 +613,7 @@ func (m *Worker) End() error {
 			m.streams.Stdout.Close()
 			m.streams.Stderr.Close()
 		}
-		if err := m.task.Kill(m.ctx, syscall.SIGKILL); err != nil {
+		if err := m.task.Kill(m.ctx, syscall.SIGKILL, containerd.WithKillAll); err != nil {
 			if errdefs.IsFailedPrecondition(err) || errdefs.IsNotFound(err) {
 				return nil
 			}

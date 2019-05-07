@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/burntsushi/toml"
 	"github.com/containerd/containerd"
@@ -108,6 +109,11 @@ func NewContainerdServer(runDir string, config containerdrunner.Config) (*exec.C
 	}
 
 	cmd := exec.Command("containerd", "--config", configFile.Name())
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setpgid: true,
+	}
 	err = cmd.Start()
 	if err != nil {
 		return nil, fmt.Errorf("could exec containerd: %s", err)
@@ -137,6 +143,7 @@ func (p *WorkerPool) Close() error {
 	if err != nil {
 		return err
 	}
+	p.server.Wait()
 
 	err = os.RemoveAll(p.runDir)
 	if err != nil {

@@ -13,20 +13,14 @@ func main() {
 	if len(os.Args) > 2 {
 		pid := os.Args[2]
 		fmt.Println("killing pid")
-		err := exec.Command("kill", "-9", string(pid)).Run()
-		if err != nil {
-			panic(err)
-		}
+		exec.Command("kill", "-9", string(pid)).Run()
 	}
 
 	out, _ := exec.Command("grep", runDir, "/proc/mounts").Output()
 	if string(out) != "" {
 		fmt.Println("doing unmount")
 		mount := strings.Fields(string(out))[1]
-		_, err := exec.Command("umount", "-r", mount).Output()
-		if err != nil {
-			panic(err)
-		}
+		exec.Command("umount", "-r", mount).Output()
 	}
 
 	os.RemoveAll(runDir)
