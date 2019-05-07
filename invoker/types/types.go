@@ -3,6 +3,7 @@ package types
 import (
 	"encoding/base64"
 	"fmt"
+	"time"
 )
 
 type Name struct {
@@ -12,9 +13,11 @@ type Name struct {
 }
 
 type ActivationMessage struct {
-	Action       Action `json:"action"`
-	ActivationID string `json:"activationId"`
-	Blocking     bool   `json:"blocking"`
+	Action       Action      `json:"action"`
+	ActivationID string      `json:"activationId"`
+	Blocking     bool        `json:"blocking"`
+	Parameters   interface{} `json:"content"`
+	Revision     string      `json:"revision"`
 	Controller   struct {
 		AsString string `json:"asString"`
 	} `json:"rootControllerIndex"`
@@ -23,8 +26,9 @@ type ActivationMessage struct {
 }
 
 type Action struct {
-	Name string `json:"name"`
-	Path string `json:"path"`
+	Name    string `json:"name"`
+	Path    string `json:"path"`
+	Version string `json:"version"`
 }
 
 type User struct {
@@ -83,6 +87,28 @@ type Response struct {
 type ResponseValue struct {
 	Result     interface{} `json:"result"`
 	StatusCode int         `json:"statusCode"`
+}
+
+func GenerateResponse(activationMessage *ActivationMessage, function *FunctionDoc, result interface{}) Response {
+	logs := make([]interface{}, 0)
+	return Response{
+		ActivationID: activationMessage.ActivationID,
+		Annotations:  function.Annotations,
+		Name:         function.Name,
+		Namespace:    function.Namespace,
+		Response: ResponseValue{
+			Result:     result,
+			StatusCode: 0,
+		},
+		Start:      int(time.Now().Unix()),
+		End:        int(time.Now().Unix() + 2),
+		Duration:   5,
+		Subject:    activationMessage.User.Subject,
+		EntityType: "activation",
+		Logs:       logs,
+		Publish:    function.Publish,
+		Version:    function.Version,
+	}
 }
 
 type FunctionDoc struct {

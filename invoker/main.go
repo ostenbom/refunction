@@ -119,7 +119,7 @@ func consumeMessage(activation *types.ActivationMessage, functionStorage storage
 	}).Debug("fetched function")
 
 	// Schedule function
-	result, err := workers.Run(function, "{}")
+	result, err := workers.Run(function, activation.Parameters)
 	if err != nil {
 		return fmt.Errorf("could not run function %s: %s", function.Name, err)
 	}
@@ -129,6 +129,14 @@ func consumeMessage(activation *types.ActivationMessage, functionStorage storage
 	}).Debug("function run complete")
 
 	// Send ack
+	if activation.Blocking {
+		go func() {
+			err := messenger.SendResult(activation, function, result)
+			if err != nil {
+				log.Errorf("could not send result %s, %s: %s", function.Name, activation.ActivationID, err)
+			}
+		}()
+	}
 
 	go func() {
 		err := messenger.SendCompletion(activation, function, result)

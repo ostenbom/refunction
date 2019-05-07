@@ -62,28 +62,10 @@ func (s functionStorage) GetFunction(path string, name string) (*types.FunctionD
 func (s functionStorage) StoreActivation(activationMessage *types.ActivationMessage, function *types.FunctionDoc, result interface{}) error {
 	docID := fmt.Sprintf("%s/%s", function.Namespace, activationMessage.ActivationID)
 
-	logs := make([]interface{}, 0)
 	activation := types.ActivationDoc{
-		ID:      docID,
-		Updated: int(time.Now().Unix()),
-		Response: types.Response{
-			ActivationID: activationMessage.ActivationID,
-			Annotations:  function.Annotations,
-			Name:         function.Name,
-			Namespace:    function.Namespace,
-			Response: types.ResponseValue{
-				Result:     result,
-				StatusCode: 0,
-			},
-			Start:      int(time.Now().Unix()),
-			End:        int(time.Now().Unix() + 2),
-			Duration:   5,
-			Subject:    activationMessage.User.Subject,
-			EntityType: "activation",
-			Logs:       logs,
-			Publish:    function.Publish,
-			Version:    function.Version,
-		},
+		ID:       docID,
+		Updated:  int(time.Now().Unix()),
+		Response: types.GenerateResponse(activationMessage, function, result),
 	}
 
 	activationsJSON, err := json.Marshal(&activation)

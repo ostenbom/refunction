@@ -83,6 +83,20 @@ func (m *Messenger) SendCompletion(activation *types.ActivationMessage, function
 	return m.provider.WriteMessage(controllerTopic, rawCompletion)
 }
 
+func (m *Messenger) SendResult(activation *types.ActivationMessage, function *types.FunctionDoc, result interface{}) error {
+	controllerTopic := fmt.Sprintf("completed%s", activation.Controller.AsString)
+	completion := types.CompletionResponseMessage{
+		Response:      types.GenerateResponse(activation, function, result),
+		TransactionID: activation.TransactionID,
+	}
+
+	rawCompletion, err := json.Marshal(completion)
+	if err != nil {
+		return fmt.Errorf("could not marshal completion message: %s", err)
+	}
+	return m.provider.WriteMessage(controllerTopic, rawCompletion)
+}
+
 func (m *Messenger) StartHealthPings(invokerNumber int) chan bool {
 	stop := make(chan bool)
 	go func() {
