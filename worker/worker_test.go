@@ -3,7 +3,6 @@ package worker_test
 import (
 	"strconv"
 
-	"github.com/containerd/containerd/cio"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
@@ -33,7 +32,7 @@ var _ = Describe("Worker", func() {
 				Expect(err).NotTo(HaveOccurred())
 				stdout = gbytes.NewBuffer()
 				stderr = gbytes.NewBuffer()
-				worker.WithCreator(cio.NewCreator(cio.WithStreams(nil, stdout, stderr)))
+				worker.WithStdPipes(stderr, stdout)
 
 				Expect(worker.Start()).To(Succeed())
 			})
@@ -51,7 +50,7 @@ var _ = Describe("Worker", func() {
 				Expect(err).NotTo(HaveOccurred())
 				stdout = gbytes.NewBuffer()
 				stderr = gbytes.NewBuffer()
-				worker.WithCreator(cio.NewCreator(cio.WithStreams(nil, stdout, stderr)))
+				worker.WithStdPipes(stderr, stdout)
 
 				Expect(worker.Start()).To(Succeed())
 			})

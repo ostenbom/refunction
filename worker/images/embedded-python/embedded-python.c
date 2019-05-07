@@ -89,37 +89,45 @@ int main(int argc, char *argv[]) {
   raise(SIGUSR1);
   log_line("post checkpoint");
 
-  log_line("starting function json load");
-  /* Receive handler function string */
-  cJSON *function_json = recv_json();
-  cJSON *handler = cJSON_GetObjectItemCaseSensitive(function_json, "handler");
-  char *handler_string = handler->valuestring;
-  log_line(handler_string);
+  int handler_loaded = 0;
 
-  /* Load handler function into module */
-  pvalue = PyRun_String(handler_string, Py_file_input, pglobal, pglobal);
-  if (pvalue == NULL) {
-      if (PyErr_Occurred()) {
-        PyErr_Print();
-      }
-      fprintf(stderr, "Error: could not load handle function\n");
-      exit(1);
+  while (!handler_loaded) {
+    log_line("starting function json load");
+    /* Receive handler function string */
+    cJSON *function_json = recv_json();
+    cJSON *handler = cJSON_GetObjectItemCaseSensitive(function_json, "data");
+    char *handler_string = handler->valuestring;
+    log_line(handler_string);
+
+    /* Load handler function into module */
+    pvalue = PyRun_String(handler_string, Py_file_input, pglobal, pglobal);
+    if (pvalue == NULL) {
+        if (PyErr_Occurred()) {
+          PyErr_Print();
+        }
+        fprintf(stderr, "Error: could not load handle function\n");
+        send_function_loaded("false");
+        continue;
+    }
+    cJSON_Delete(function_json);
+
+    phandle_func = PyObject_GetAttrString(handle_module, "main");
+
+    if (!phandle_func || !PyCallable_Check(phandle_func)) {
+        if (PyErr_Occurred()) {
+          PyErr_Print();
+        }
+        fprintf(stderr, "Error: obtain handle function from module\n");
+        send_function_loaded("false");
+        continue;
+    }
+
+    handler_loaded = 1;
   }
+
   Py_DECREF(pvalue);
-  cJSON_Delete(function_json);
-
-  phandle_func = PyObject_GetAttrString(handle_module, "main");
-
-  if (!phandle_func || !PyCallable_Check(phandle_func)) {
-      if (PyErr_Occurred()) {
-        PyErr_Print();
-      }
-      fprintf(stderr, "Error: obtain handle function from module\n");
-      exit(1);
-  }
-
   log_line("handle function successfully loaded");
-  send_function_loaded();
+  send_function_loaded("true");
 
   PyObject *pjson_loads, *pjson_dumps;
   pjson_loads = PyObject_GetAttrString(json_module, "loads");
@@ -134,7 +142,7 @@ int main(int argc, char *argv[]) {
     cJSON *req_json = recv_json();
     // TODO: Check if json is type request
     cJSON *request_data = cJSON_GetObjectItemCaseSensitive(req_json, "data");
-    char *request_data_string = request_data->valuestring;
+    char *request_data_string = cJSON_PrintUnformatted(request_data);
     log_line(request_data_string);
 
     // json.loads(request)
@@ -173,17 +181,11 @@ int main(int argc, char *argv[]) {
 
     log_line("handle call complete");
 
-    PyObject_Print(presponse, stdout, 0);
-
     // json.dumps(response)
     PyObject *pjson_response, *pjson_dump_args;
     pjson_dump_args = PyTuple_New(1);
-    log_line("get attr string");
     PyTuple_SetItem(pjson_dump_args, 0, presponse);
-    log_line("set item");
     pjson_response = PyObject_CallObject(pjson_dumps, pjson_dump_args);
-    PyObject_Print(pjson_response, stdout, 0);
-    log_line("call obj");
     Py_DECREF(pjson_dump_args);
 
 
@@ -214,11 +216,11 @@ int main(int argc, char *argv[]) {
   /* return 0; */
 }
 
-void send_function_loaded() {
+void send_function_loaded(char* data) {
   char *log_string = NULL;
   cJSON *log = cJSON_CreateObject();
   cJSON_AddStringToObject(log, "type", "function_loaded");
-  cJSON_AddStringToObject(log, "data", "");
+  cJSON_AddStringToObject(log, "data", data);
 
   log_string = cJSON_PrintUnformatted(log);
   printf("%s\n", log_string);

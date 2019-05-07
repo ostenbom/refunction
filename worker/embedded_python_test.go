@@ -30,7 +30,7 @@ var _ = Describe("Embedded Python Serverless Function Management", func() {
 		worker, err = NewWorker(id, client, runtime, targetLayer)
 		Expect(err).NotTo(HaveOccurred())
 		stdout = gbytes.NewBuffer()
-		worker.WithStdPipeCommunicationExtras(GinkgoWriter, stdout, GinkgoWriter)
+		worker.WithStdPipes(GinkgoWriter, stdout, GinkgoWriter)
 
 		straceBuffer = gbytes.NewBuffer()
 		multiBuffer := io.MultiWriter(straceBuffer, GinkgoWriter)
@@ -68,7 +68,7 @@ var _ = Describe("Embedded Python Serverless Function Management", func() {
 			function := "def main(req):\n  print(req)\n  return req"
 			Expect(worker.SendFunction(function)).To(Succeed())
 
-			request := "\"jsonstring\""
+			request := "jsonstring"
 			response, err := worker.SendRequest(request)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(response).To(Equal(request))
@@ -80,7 +80,9 @@ var _ = Describe("Embedded Python Serverless Function Management", func() {
 			function := "def main(req):\n  print(req)\n  return req"
 			Expect(worker.SendFunction(function)).To(Succeed())
 
-			request := "{\"greatkey\":\"nicevalue\"}"
+			request := map[string]interface{}{
+				"greatkey": "nicevalue",
+			}
 			response, err := worker.SendRequest(request)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(response).To(Equal(request))
@@ -93,17 +95,17 @@ var _ = Describe("Embedded Python Serverless Function Management", func() {
 			Expect(worker.SendFunction(function)).To(Succeed())
 			Eventually(stdout).Should(gbytes.Say("handle function successfully loaded"))
 
-			request := "\"jsonstring\""
+			request := "jsonstring"
 			response, err := worker.SendRequest(request)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(response).To(Equal(request))
 
-			request = "\"anotherstring\""
+			request = "anotherstring"
 			response, err = worker.SendRequest(request)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(response).To(Equal(request))
 
-			request = "\"whateverstring\""
+			request = "whateverstring"
 			response, err = worker.SendRequest(request)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(response).To(Equal(request))
@@ -115,7 +117,7 @@ var _ = Describe("Embedded Python Serverless Function Management", func() {
 			function := "def main(req):\n  print(req)\n  return req"
 			Expect(worker.SendFunction(function)).To(Succeed())
 
-			request := "\"jsonstring\""
+			request := "jsonstring"
 			response, err := worker.SendRequest(request)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(response).To(Equal(request))
@@ -128,10 +130,10 @@ var _ = Describe("Embedded Python Serverless Function Management", func() {
 			function = "def main(req):\n  print(req)\n  return 'unrelated'"
 			Expect(worker.SendFunction(function)).To(Succeed())
 
-			request = "\"anotherstring\""
+			request = "anotherstring"
 			response, err = worker.SendRequest(request)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(response).To(Equal("\"unrelated\""))
+			Expect(response).To(Equal("unrelated"))
 		})
 
 		It("can load a function with an import from the std library", func() {
@@ -140,10 +142,15 @@ var _ = Describe("Embedded Python Serverless Function Management", func() {
 			function := "import math\ndef main(req):\n  print(req)\n  return math.ceil(req)"
 			Expect(worker.SendFunction(function)).To(Succeed())
 
-			request := "3.5"
+			request := 3.5
 			response, err := worker.SendRequest(request)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(response).To(Equal("4"))
+			switch v := response.(type) {
+			case float64:
+				Expect(v).To(Equal(float64(4)))
+			default:
+				Fail("function returned unknown type")
+			}
 		})
 
 		It("can load different stdlibrary functions", func() {
@@ -152,10 +159,15 @@ var _ = Describe("Embedded Python Serverless Function Management", func() {
 			function := "import math\ndef main(req):\n  print(req)\n  return math.ceil(req)"
 			Expect(worker.SendFunction(function)).To(Succeed())
 
-			request := "3.5"
+			request := 3.5
 			response, err := worker.SendRequest(request)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(response).To(Equal("4"))
+			switch v := response.(type) {
+			case float64:
+				Expect(v).To(Equal(float64(4)))
+			default:
+				Fail("function returned unknown type")
+			}
 
 			Expect(worker.SendSignal(syscall.SIGUSR2)).To(Succeed())
 			worker.AwaitSignal(syscall.SIGUSR2)
@@ -165,10 +177,29 @@ var _ = Describe("Embedded Python Serverless Function Management", func() {
 			function = "import string\ndef main(req):\n  print(req)\n  return string.ascii_lowercase"
 			Expect(worker.SendFunction(function)).To(Succeed())
 
-			request = "\"dummyanything\""
-			response, err = worker.SendRequest(request)
+			newrequest := "dummyanything"
+			response, err = worker.SendRequest(newrequest)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(response).To(Equal("\"abcdefghijklmnopqrstuvwxyz\""))
+			Expect(response).To(Equal("abcdefghijklmnopqrstuvwxyz"))
+		})
+
+		It("is resiliant to improper function loads", func() {
+			Expect(worker.Activate()).To(Succeed())
+
+			// JS for example
+			function := "function main(params) {\n    return params || {};\n}\n"
+			err := worker.SendFunction(function)
+			Expect(err).NotTo(BeNil())
+			Eventually(stdout).Should(gbytes.Say("{\"type\":\"function_loaded\",\"data\":\"false\"}"))
+
+			function = "def main(req):\n  print(req)\n  return req"
+			Expect(worker.SendFunction(function)).To(Succeed())
+			Eventually(stdout).Should(gbytes.Say("handle function successfully loaded"))
+
+			request := "jsonstring"
+			response, err := worker.SendRequest(request)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(response).To(Equal(request))
 		})
 	})
 })

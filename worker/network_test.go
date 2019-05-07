@@ -1,12 +1,10 @@
 package worker_test
 
 import (
-	"io"
 	"io/ioutil"
 	"net"
 	"strconv"
 
-	"github.com/containerd/containerd/cio"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
@@ -35,7 +33,7 @@ var _ = Describe("Network", func() {
 			Expect(err).NotTo(HaveOccurred())
 			stdout = gbytes.NewBuffer()
 			stderr = gbytes.NewBuffer()
-			worker.WithCreator(cio.NewCreator(cio.WithStreams(nil, io.MultiWriter(stdout, GinkgoWriter), io.MultiWriter(stderr, GinkgoWriter))))
+			worker.WithStdPipes(stderr, stdout, GinkgoWriter)
 			Expect(worker.Start()).To(Succeed())
 		})
 

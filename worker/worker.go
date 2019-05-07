@@ -41,13 +41,6 @@ type PtraceChannels struct {
 	Error          chan error
 }
 
-type CommunicationType int
-
-const (
-	SocketCommunication CommunicationType = iota + 1
-	StdPipeCommunication
-)
-
 type Streams struct {
 	Stdin  *io.PipeWriter
 	Stdout *io.PipeReader
@@ -66,9 +59,8 @@ func NewWorker(id string, client *containerd.Client, runtime, targetSnapshot str
 		ID:                     id,
 		targetSnapshot:         targetSnapshot,
 		runtime:                runtime,
-		communication:          SocketCommunication,
-		responses:              make(chan string, 1),
-		functionLoadedMessages: make(chan string, 1),
+		responses:              make(chan interface{}, 1),
+		functionLoadedMessages: make(chan bool, 1),
 		client:                 client,
 		ctx:                    ctx,
 		creator:                cio.NullIO,
@@ -91,10 +83,11 @@ type Worker struct {
 	ContainerID            string
 	targetSnapshot         string
 	runtime                string
-	communication          CommunicationType
 	streams                *Streams
-	responses              chan string
-	functionLoadedMessages chan string
+	responses              chan interface{}
+	functionLoadedMessages chan bool
+	stderrWriters          []io.Writer
+	stdoutWriters          []io.Writer
 	client                 *containerd.Client
 	ctx                    context.Context
 	creator                cio.Creator
@@ -111,45 +104,36 @@ type Worker struct {
 	IP                     net.IP
 }
 
-type LoadFunctionReq struct {
-	Type    string `json:"type"`
-	Handler string `json:"handler"`
-}
-
 type FunctionData struct {
-	Type string `json:"type"`
-	Data string `json:"data"`
+	Type string      `json:"type"`
+	Data interface{} `json:"data"`
 }
 
 type RequestResponse struct {
-	Type string          `json:"type"`
-	Data json.RawMessage `json:"data"`
+	Type string      `json:"type"`
+	Data interface{} `json:"data"`
 }
 
-func (m *Worker) WithStdPipeCommunicationExtras(stderrWriter io.Writer, stdoutWriters ...io.Writer) {
-	m.withStdPipeCommunication([]io.Writer{stderrWriter}, stdoutWriters)
+func (m *Worker) WithStdPipes(stderrWriter io.Writer, stdoutWriters ...io.Writer) {
+	m.stderrWriters = []io.Writer{stderrWriter}
+	m.stdoutWriters = stdoutWriters
 }
 
-func (m *Worker) WithStdPipeCommunication() {
-	m.withStdPipeCommunication([]io.Writer{}, []io.Writer{})
-}
-
-func (m *Worker) withStdPipeCommunication(stderrWriters []io.Writer, stdoutWriters []io.Writer) {
-	m.communication = StdPipeCommunication
+func (m *Worker) connectStdPipes() {
 	stdinRead, stdinWrite := io.Pipe()
 	stdoutRead, stdoutWrite := io.Pipe()
 	stderrRead, stderrWrite := io.Pipe()
 
 	var collectedStdErr io.Writer
-	if len(stderrWriters) > 0 {
-		collectedStdErr = io.MultiWriter(append(stderrWriters, stderrWrite)...)
+	if len(m.stderrWriters) > 0 {
+		collectedStdErr = io.MultiWriter(append(m.stderrWriters, stderrWrite)...)
 	} else {
 		collectedStdErr = stderrWrite
 	}
 
 	var collectedStdOut io.Writer
-	if len(stderrWriters) > 0 {
-		collectedStdOut = io.MultiWriter(append(stdoutWriters, stdoutWrite)...)
+	if len(m.stdoutWriters) > 0 {
+		collectedStdOut = io.MultiWriter(append(m.stdoutWriters, stdoutWrite)...)
 	} else {
 		collectedStdOut = stdoutWrite
 	}
@@ -182,28 +166,26 @@ func (m *Worker) withStdPipeCommunication(stderrWriters []io.Writer, stdoutWrite
 				continue
 			}
 
-			// switch v := data.Data.(type) {
-			// case string:
-			// 	fmt.Printf("Data is: %s\n", v)
-			// default:
-			// 	fmt.Printf("Data was something else: %s\n", reflect.TypeOf(data.Data))
-			// }
-
-			log.Debug(string(data.Data))
+			dataString, ok := data.Data.(string)
+			if ok {
+				log.Debug(dataString)
+			}
 
 			if data.Type == "info" {
 				// fmt.Println(data.Data)
 			} else if data.Type == "response" {
-				m.responses <- string(data.Data)
+				m.responses <- data.Data
 			} else if data.Type == "function_loaded" {
-				m.functionLoadedMessages <- "loaded"
+				if dataString == "false" {
+					// Function load failed
+					m.functionLoadedMessages <- false
+				} else {
+
+					m.functionLoadedMessages <- true
+				}
 			}
 		}
 	}()
-}
-
-func (m *Worker) WithCreator(creator cio.Creator) {
-	m.creator = creator
 }
 
 func (m *Worker) WithSyscallTrace(to io.Writer) {
@@ -264,7 +246,7 @@ func (m *Worker) Start() error {
 	}
 
 	m.container = container
-
+	m.connectStdPipes()
 	task, err := container.NewTask(m.ctx, m.creator)
 	if err != nil {
 		return fmt.Errorf("could not create worker task: %s", err)
@@ -343,85 +325,37 @@ func (m *Worker) GetCheckpoints() []*State {
 }
 
 func (m *Worker) SendFunction(function string) error {
-	if m.communication == StdPipeCommunication {
-		functionReq := &LoadFunctionReq{Type: "function", Handler: function}
-		functionReqString, err := json.Marshal(functionReq)
-		if err != nil {
-			return err
-		}
-		newLineReq := append(functionReqString, []byte("\n")...)
-		_, err = m.streams.Stdin.Write(newLineReq)
-
-		<-m.functionLoadedMessages
-		return err
-	}
-
-	tcpAddr := net.TCPAddr{
-		IP:   m.IP,
-		Port: 5000,
-	}
-
-	functionReq := &LoadFunctionReq{Handler: function}
+	functionReq := &FunctionData{Type: "function", Data: function}
 	functionReqString, err := json.Marshal(functionReq)
 	if err != nil {
-		return fmt.Errorf("could not marshal function: %s, %s", function, err)
+		return err
 	}
-
-	conn, err := net.DialTCP("tcp", nil, &tcpAddr)
+	newLineReq := append(functionReqString, []byte("\n")...)
+	_, err = m.streams.Stdin.Write(newLineReq)
 	if err != nil {
-		return fmt.Errorf("could not dial worker: %s", err)
-	}
-	defer conn.Close()
-
-	_, err = conn.Write(functionReqString)
-	if err != nil {
-		return fmt.Errorf("could not write to worker: %s", err)
+		return fmt.Errorf("could not write to worker stdin: %s", err)
 	}
 
+	success := <-m.functionLoadedMessages
+	if !success {
+		return fmt.Errorf("function failed to load")
+	}
 	return nil
 }
 
-func (m *Worker) SendRequest(request string) (string, error) {
-	if m.communication == StdPipeCommunication {
-		functionReq := &FunctionData{Type: "request", Data: request}
-		functionReqString, err := json.Marshal(functionReq)
-		if err != nil {
-			return "", err
-		}
-		newLineReq := append(functionReqString, []byte("\n")...)
-		_, err = m.streams.Stdin.Write(newLineReq)
-		if err != nil {
-			return "", err
-		}
-
-		return <-m.responses, nil
-	}
-
-	tcpAddr := net.TCPAddr{
-		IP:   m.IP,
-		Port: 5000,
-	}
-
-	conn, err := net.DialTCP("tcp", nil, &tcpAddr)
+func (m *Worker) SendRequest(request interface{}) (interface{}, error) {
+	functionReq := &FunctionData{Type: "request", Data: request}
+	functionReqString, err := json.Marshal(functionReq)
 	if err != nil {
-		return "", fmt.Errorf("could not dial worker: %s", err)
+		return "", err
 	}
-	defer conn.Close()
-
-	_, err = conn.Write([]byte(request))
+	newLineReq := append(functionReqString, []byte("\n")...)
+	_, err = m.streams.Stdin.Write(newLineReq)
 	if err != nil {
-		return "", fmt.Errorf("could not write to worker: %s", err)
+		return "", err
 	}
 
-	decoder := json.NewDecoder(conn)
-	var resp RequestResponse
-
-	err = decoder.Decode(&resp)
-	if err != nil {
-		return "", fmt.Errorf("could not get request response: %s", err)
-	}
-
-	return string(resp.Data), nil
+	return <-m.responses, nil
 }
 
 // AwaitSignal lets the process continue until the desired signal is caught.

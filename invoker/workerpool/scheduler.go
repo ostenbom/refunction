@@ -54,7 +54,7 @@ func NewFakeScheduler(workers map[string]*ScheduleWorker, undeployed []string, d
 	}
 }
 
-func (p *WorkerPool) Run(function *types.FunctionDoc, request string) (string, error) {
+func (p *WorkerPool) Run(function *types.FunctionDoc, request string) (interface{}, error) {
 	functionLogger := log.WithFields(log.Fields{
 		"request":      request,
 		"functionID":   function.ID,

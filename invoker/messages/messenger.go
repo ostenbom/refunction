@@ -66,7 +66,7 @@ func (m *Messenger) GetActivation() (*types.ActivationMessage, error) {
 	return &activation, nil
 }
 
-func (m *Messenger) SendCompletion(activation *types.ActivationMessage, function *types.FunctionDoc, result string) error {
+func (m *Messenger) SendCompletion(activation *types.ActivationMessage, function *types.FunctionDoc, result interface{}) error {
 	controllerTopic := fmt.Sprintf("completed%s", activation.Controller.AsString)
 
 	completion := types.CompletionMessage{

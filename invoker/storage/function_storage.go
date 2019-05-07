@@ -14,7 +14,7 @@ import (
 
 type FunctionStorage interface {
 	GetFunction(path string, name string) (*types.FunctionDoc, error)
-	StoreActivation(*types.ActivationMessage, *types.FunctionDoc, string) error
+	StoreActivation(*types.ActivationMessage, *types.FunctionDoc, interface{}) error
 }
 
 type functionStorage struct {
@@ -59,14 +59,8 @@ func (s functionStorage) GetFunction(path string, name string) (*types.FunctionD
 	return &function, nil
 }
 
-func (s functionStorage) StoreActivation(activationMessage *types.ActivationMessage, function *types.FunctionDoc, result string) error {
+func (s functionStorage) StoreActivation(activationMessage *types.ActivationMessage, function *types.FunctionDoc, result interface{}) error {
 	docID := fmt.Sprintf("%s/%s", function.Namespace, activationMessage.ActivationID)
-
-	var resultObject map[string]interface{}
-	err := json.Unmarshal([]byte(result), &resultObject)
-	if err != nil {
-		return fmt.Errorf("could not Unmarshal result to object: %s", err)
-	}
 
 	logs := make([]interface{}, 0)
 	activation := types.ActivationDoc{
@@ -78,7 +72,7 @@ func (s functionStorage) StoreActivation(activationMessage *types.ActivationMess
 			Name:         function.Name,
 			Namespace:    function.Namespace,
 			Response: types.ResponseValue{
-				Result:     resultObject,
+				Result:     result,
 				StatusCode: 0,
 			},
 			Start:      int(time.Now().Unix()),

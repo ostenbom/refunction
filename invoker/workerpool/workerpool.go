@@ -65,7 +65,6 @@ func NewWorkerPool(size int) (*WorkerPool, error) {
 		if err != nil {
 			return nil, fmt.Errorf("could not start worker in pool: %s", err)
 		}
-		w.WithStdPipeCommunication()
 		workers[i] = w
 	}
 
