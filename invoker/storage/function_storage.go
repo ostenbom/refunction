@@ -13,7 +13,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const defaultCacheSize int = 256
+const defaultCacheSize int = 64
 
 type FunctionStorage interface {
 	GetFunction(path string, name string) (*types.FunctionDoc, error)
@@ -56,11 +56,17 @@ func NewFunctionStorage(host string, functionDBName string, activationDBName str
 
 func (s functionStorage) GetFunction(path string, name string) (*types.FunctionDoc, error) {
 	fullDocID := fmt.Sprintf("%s/%s", path, name)
-	cacheResp, ok := s.functionCache.Get(fullDocID)
-	if ok {
+	if s.functionCache.Contains(fullDocID) {
+		log.WithFields(log.Fields{
+			"function": fullDocID,
+		}).Debug("cache hit")
+		cacheResp, _ := s.functionCache.Get(fullDocID)
 		return cacheResp.(*types.FunctionDoc), nil
 	}
 
+	log.WithFields(log.Fields{
+		"function": fullDocID,
+	}).Debug("cache miss")
 	row, err := s.functionDB.Get(context.Background(), fullDocID)
 	if err != nil {
 		return nil, fmt.Errorf("could not fetch database function %s: %s", fullDocID, err)
