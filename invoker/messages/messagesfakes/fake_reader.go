@@ -5,8 +5,8 @@ import (
 	"context"
 	"sync"
 
+	kafka "github.com/ostenbom/kafka-go"
 	"github.com/ostenbom/refunction/invoker/messages"
-	kafka "github.com/segmentio/kafka-go"
 )
 
 type FakeReader struct {

@@ -97,8 +97,6 @@ func startInvoker() int {
 		case err := <-errorChan:
 			printError(err)
 			return 1
-		default:
-			time.Sleep(time.Millisecond * 100)
 		}
 	}
 

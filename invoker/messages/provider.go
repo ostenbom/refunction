@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/segmentio/kafka-go"
+	"github.com/ostenbom/kafka-go"
 )
 
 const defaultPartitions = 1

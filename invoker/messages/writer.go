@@ -3,7 +3,7 @@ package messages
 import (
 	"context"
 
-	"github.com/segmentio/kafka-go"
+	"github.com/ostenbom/kafka-go"
 )
 
 //go:generate gobin -m -run github.com/maxbrunsfeld/counterfeiter/v6 . Writer
