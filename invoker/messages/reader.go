@@ -2,11 +2,9 @@ package messages
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/ostenbom/kafka-go"
-	log "github.com/sirupsen/logrus"
 )
 
 const defaultMinBytes = 10
