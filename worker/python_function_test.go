@@ -3,7 +3,6 @@ package worker_test
 import (
 	"io"
 	"strconv"
-	"syscall"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -12,10 +11,10 @@ import (
 	. "github.com/ostenbom/refunction/worker"
 )
 
-var _ = Describe("Embedded Python Serverless Function Management", func() {
+var _ = Describe("Python Serverless Function Management", func() {
 	var id string
 	// runtime := "python3-dbg"
-	runtime := "alpinepython"
+	runtime := "python"
 	var targetLayer string
 	var worker *Worker
 	var stdout *gbytes.Buffer
@@ -47,19 +46,18 @@ var _ = Describe("Embedded Python Serverless Function Management", func() {
 	Describe("server managed functions", func() {
 
 		BeforeEach(func() {
-			targetLayer = "embedded-python"
+			targetLayer = "serverless-function.py"
 		})
 
 		It("can load a function", func() {
 			// Initiate python ready sequence
 			Expect(worker.Activate()).To(Succeed())
 			Expect(len(worker.GetCheckpoints())).To(Equal(1))
-			Eventually(stdout).Should(gbytes.Say("python started"))
-			Eventually(stdout).Should(gbytes.Say("post checkpoint"))
+			Eventually(stdout).Should(gbytes.Say("started"))
 
 			function := "def main(req):\n  print(req)\n  return req"
 			Expect(worker.SendFunction(function)).To(Succeed())
-			Eventually(stdout).Should(gbytes.Say("handle function successfully loaded"))
+			Eventually(stdout).Should(gbytes.Say("{\"type\": \"function_loaded\", \"data\": true}"))
 		})
 
 		It("can get a request response", func() {
@@ -93,7 +91,7 @@ var _ = Describe("Embedded Python Serverless Function Management", func() {
 
 			function := "def main(req):\n  print(req)\n  return req"
 			Expect(worker.SendFunction(function)).To(Succeed())
-			Eventually(stdout).Should(gbytes.Say("handle function successfully loaded"))
+			Eventually(stdout).Should(gbytes.Say("{\"type\": \"function_loaded\", \"data\": true}"))
 
 			request := "jsonstring"
 			response, err := worker.SendRequest(request)
@@ -121,9 +119,6 @@ var _ = Describe("Embedded Python Serverless Function Management", func() {
 			response, err := worker.SendRequest(request)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(response).To(Equal(request))
-
-			Expect(worker.SendSignal(syscall.SIGUSR2)).To(Succeed())
-			worker.AwaitSignal(syscall.SIGUSR2)
 
 			Expect(worker.Restore()).To(Succeed())
 
@@ -169,9 +164,6 @@ var _ = Describe("Embedded Python Serverless Function Management", func() {
 				Fail("function returned unknown type")
 			}
 
-			Expect(worker.SendSignal(syscall.SIGUSR2)).To(Succeed())
-			worker.AwaitSignal(syscall.SIGUSR2)
-
 			Expect(worker.Restore()).To(Succeed())
 
 			function = "import string\ndef main(req):\n  print(req)\n  return string.ascii_lowercase"
@@ -190,11 +182,11 @@ var _ = Describe("Embedded Python Serverless Function Management", func() {
 			function := "function main(params) {\n    return params || {};\n}\n"
 			err := worker.SendFunction(function)
 			Expect(err).NotTo(BeNil())
-			Eventually(stdout).Should(gbytes.Say("{\"type\":\"function_loaded\",\"data\":\"false\"}"))
+			Eventually(stdout).Should(gbytes.Say("{\"type\": \"function_loaded\", \"data\": false}"))
 
 			function = "def main(req):\n  print(req)\n  return req"
 			Expect(worker.SendFunction(function)).To(Succeed())
-			Eventually(stdout).Should(gbytes.Say("handle function successfully loaded"))
+			Eventually(stdout).Should(gbytes.Say("{\"type\": \"function_loaded\", \"data\": true}"))
 
 			request := "jsonstring"
 			response, err := worker.SendRequest(request)

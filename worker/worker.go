@@ -25,12 +25,6 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const RuntimeStartedSignal = syscall.SIGUSR2
-const ActivateChildSignal = syscall.SIGUSR1
-const CheckpointSignal = syscall.SIGUSR1
-const FinishServerSignal = syscall.SIGUSR2
-const ServerFinishedSignal = syscall.SIGUSR2
-
 type PtraceChannels struct {
 	SignalStop     chan syscall.WaitStatus
 	Continue       chan syscall.Signal
@@ -56,15 +50,14 @@ func NewWorker(id string, client *containerd.Client, runtime, targetSnapshot str
 	}
 
 	return &Worker{
-		ID:                     id,
-		targetSnapshot:         targetSnapshot,
-		runtime:                runtime,
-		responses:              make(chan interface{}, 1),
-		functionLoadedMessages: make(chan bool, 1),
-		client:                 client,
-		ctx:                    ctx,
-		creator:                cio.NullIO,
-		snapManager:            snapManager,
+		ID:             id,
+		targetSnapshot: targetSnapshot,
+		runtime:        runtime,
+		messages:       make(chan Message, 1),
+		client:         client,
+		ctx:            ctx,
+		creator:        cio.NullIO,
+		snapManager:    snapManager,
 		ptrace: PtraceChannels{
 			SignalStop:     make(chan syscall.WaitStatus, 1),
 			Continue:       make(chan syscall.Signal),
@@ -79,37 +72,31 @@ func NewWorker(id string, client *containerd.Client, runtime, targetSnapshot str
 }
 
 type Worker struct {
-	ID                     string
-	ContainerID            string
-	targetSnapshot         string
-	runtime                string
-	streams                *Streams
-	responses              chan interface{}
-	functionLoadedMessages chan bool
-	stderrWriters          []io.Writer
-	stdoutWriters          []io.Writer
-	client                 *containerd.Client
-	ctx                    context.Context
-	creator                cio.Creator
-	snapManager            *SnapshotManager
-	container              containerd.Container
-	task                   containerd.Task
-	taskExitChan           <-chan containerd.ExitStatus
-	checkpoints            []*State
-	attached               bool
-	attachOptions          []int
-	ptrace                 PtraceChannels
-	straceEnabled          bool
-	straceOutput           io.Writer
-	IP                     net.IP
+	ID             string
+	ContainerID    string
+	targetSnapshot string
+	runtime        string
+	streams        *Streams
+	messages       chan Message
+	stderrWriters  []io.Writer
+	stdoutWriters  []io.Writer
+	client         *containerd.Client
+	ctx            context.Context
+	creator        cio.Creator
+	snapManager    *SnapshotManager
+	container      containerd.Container
+	task           containerd.Task
+	taskExitChan   <-chan containerd.ExitStatus
+	checkpoints    []*State
+	attached       bool
+	attachOptions  []int
+	ptrace         PtraceChannels
+	straceEnabled  bool
+	straceOutput   io.Writer
+	IP             net.IP
 }
 
-type FunctionData struct {
-	Type string      `json:"type"`
-	Data interface{} `json:"data"`
-}
-
-type RequestResponse struct {
+type Message struct {
 	Type string      `json:"type"`
 	Data interface{} `json:"data"`
 }
@@ -160,29 +147,22 @@ func (m *Worker) connectStdPipes() {
 				return
 			}
 
-			var data RequestResponse
-			err = json.Unmarshal([]byte(line), &data)
+			var message Message
+			err = json.Unmarshal([]byte(line), &message)
 			if err != nil {
 				continue
 			}
 
-			dataString, ok := data.Data.(string)
+			dataString, ok := message.Data.(string)
 			if ok {
 				log.Debug(dataString)
 			}
 
-			if data.Type == "info" {
+			if message.Type == "info" || message.Type == "log" {
+				// Ignore these for now
 				// fmt.Println(data.Data)
-			} else if data.Type == "response" {
-				m.responses <- data.Data
-			} else if data.Type == "function_loaded" {
-				if dataString == "false" {
-					// Function load failed
-					m.functionLoadedMessages <- false
-				} else {
-
-					m.functionLoadedMessages <- true
-				}
+			} else {
+				m.messages <- message
 			}
 		}
 	}()
@@ -280,13 +260,9 @@ func (m *Worker) Start() error {
 func (m *Worker) Activate() error {
 	m.Attach()
 	m.Continue()
-	m.AwaitSignal(RuntimeStartedSignal)
+	m.AwaitMessage("started")
 
-	err := m.SendSignal(ActivateChildSignal)
-	if err != nil {
-		return fmt.Errorf("could not send activate signal: %s", err)
-	}
-	err = m.TakeCheckpoint()
+	err := m.TakeCheckpoint()
 	if err != nil {
 		return fmt.Errorf("could not take activation checkpoint: %s", err)
 	}
@@ -295,7 +271,10 @@ func (m *Worker) Activate() error {
 }
 
 func (m *Worker) TakeCheckpoint() error {
-	m.PauseAtSignal(CheckpointSignal)
+	err := m.Stop()
+	if err != nil {
+		return fmt.Errorf("could not stop for checkpoint")
+	}
 
 	checkStart := time.Now()
 
@@ -316,7 +295,7 @@ func (m *Worker) TakeCheckpoint() error {
 
 	fmt.Printf("checkpoint time: %s", time.Since(checkStart))
 
-	m.ContinueWith(CheckpointSignal)
+	m.ContinueWith(syscall.SIGCONT)
 	return nil
 }
 
@@ -325,7 +304,7 @@ func (m *Worker) GetCheckpoints() []*State {
 }
 
 func (m *Worker) SendFunction(function string) error {
-	functionReq := &FunctionData{Type: "function", Data: function}
+	functionReq := &Message{Type: "function", Data: function}
 	functionReqString, err := json.Marshal(functionReq)
 	if err != nil {
 		return err
@@ -336,15 +315,16 @@ func (m *Worker) SendFunction(function string) error {
 		return fmt.Errorf("could not write to worker stdin: %s", err)
 	}
 
-	success := <-m.functionLoadedMessages
-	if !success {
+	loadedMessage := m.AwaitMessage("function_loaded")
+	success, ok := loadedMessage.Data.(bool)
+	if !ok || !success {
 		return fmt.Errorf("function failed to load")
 	}
 	return nil
 }
 
 func (m *Worker) SendRequest(request interface{}) (interface{}, error) {
-	functionReq := &FunctionData{Type: "request", Data: request}
+	functionReq := &Message{Type: "request", Data: request}
 	functionReqString, err := json.Marshal(functionReq)
 	if err != nil {
 		return "", err
@@ -355,7 +335,33 @@ func (m *Worker) SendRequest(request interface{}) (interface{}, error) {
 		return "", err
 	}
 
-	return <-m.responses, nil
+	message := m.AwaitMessage("response")
+	return message.Data, nil
+}
+
+func (m *Worker) AwaitMessage(messageType string) Message {
+	for {
+		message := <-m.messages
+		if message.Type == messageType {
+			return message
+		}
+	}
+}
+
+// SendMessage writes a message to the containers stdin
+func (m *Worker) SendMessage(messageType string, data interface{}) error {
+	message := &Message{Type: messageType, Data: data}
+	messageString, err := json.Marshal(message)
+	if err != nil {
+		return err
+	}
+	newLineReq := append(messageString, []byte("\n")...)
+	_, err = m.streams.Stdin.Write(newLineReq)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // AwaitSignal lets the process continue until the desired signal is caught.
@@ -383,15 +389,6 @@ func (m *Worker) PauseAtSignal(waitingFor syscall.Signal) {
 
 	m.ptrace.SignalStop <- waitStat
 	return
-}
-
-func (m *Worker) FinishFunction() error {
-	err := m.SendSignal(syscall.SIGUSR2)
-	if err != nil {
-		return fmt.Errorf("could not finish function: %s", err)
-	}
-	m.AwaitSignal(syscall.SIGUSR2)
-	return nil
 }
 
 func (m *Worker) Restore() error {

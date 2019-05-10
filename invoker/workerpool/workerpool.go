@@ -20,8 +20,8 @@ import (
 	"github.com/ostenbom/refunction/worker/containerdrunner"
 )
 
-const defaultRuntime = "alpinepython"
-const defaultTarget = "embedded-python"
+const defaultRuntime = "python"
+const defaultTarget = "serverless-function.py"
 
 type WorkerPool struct {
 	workers   []*worker.Worker

@@ -179,15 +179,7 @@ func (sw *ScheduleWorker) Decomission() error {
 		return nil
 	}
 
-	err := sw.worker.FinishFunction()
-	if err != nil {
-		return err
-	}
-	err = sw.worker.Restore()
-	if err != nil {
-		return err
-	}
-	return nil
+	return sw.worker.Restore()
 }
 
 func (sw *ScheduleWorker) MarkRunTime() {
