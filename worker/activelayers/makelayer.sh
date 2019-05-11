@@ -17,7 +17,7 @@ fi
 mkdir -p "$scriptdir"/"$imagename"
 
 for f in "$scriptdir"/../images/"$imagename"/*; do
-  if [[ "$f" =~ .*\....?$ ]]; then
+  if [[ "$f" =~ .*\....?.?.?$ ]]; then
     cp "$f" "$scriptdir"/"$imagename"
   else
     mkdir -p "$scriptdir"/"$imagename"/bin
