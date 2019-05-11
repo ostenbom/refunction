@@ -7,6 +7,7 @@ declare -a runtimes=(
 		      "alpine"
 		      "python"
 		      "alpinepython"
+		      "java"
 		      # "node"
 		    )
 
