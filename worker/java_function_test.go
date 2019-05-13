@@ -103,7 +103,7 @@ var _ = XDescribe("Java Serverless Function Management", func() {
 			Expect(response).To(Equal(request))
 		})
 
-		XIt("can restore and change function", func() {
+		It("can restore and change function", func() {
 			Expect(worker.Activate()).To(Succeed())
 
 			Expect(worker.SendFunction(echoFunction)).To(Succeed())
