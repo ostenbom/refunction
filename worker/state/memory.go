@@ -6,6 +6,9 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
+
+	log "github.com/sirupsen/logrus"
 )
 
 type Memory struct {
@@ -163,11 +166,6 @@ func (s *State) MemoryChanged() (bool, error) {
 }
 
 func (s *State) RestoreDirtyPages() error {
-	pagemap, err := os.OpenFile(fmt.Sprintf("/proc/%d/pagemap", s.pid), os.O_RDONLY, os.ModePerm)
-	if err != nil {
-		return fmt.Errorf("could not open pid %d pagemap: %s", s.pid, err)
-	}
-	defer pagemap.Close()
 
 	memoryFile, err := os.OpenFile(fmt.Sprintf("/proc/%d/mem", s.pid), os.O_RDWR, 0)
 	if err != nil {
@@ -175,21 +173,29 @@ func (s *State) RestoreDirtyPages() error {
 	}
 	defer memoryFile.Close()
 
+	var wg sync.WaitGroup
+
 	for _, memory := range s.memoryLocations {
 		if !memory.writable {
 			continue
 		}
 
-		err := s.singleMemoryRestoreDirtyPages(memory, pagemap, memoryFile)
-		if err != nil {
-			return err
-		}
+		wg.Add(1)
+		go func(memory *Memory) {
+			defer wg.Done()
+			err := s.singleMemoryRestoreDirtyPages(memory, memoryFile)
+			if err != nil {
+				log.Error(err)
+			}
+		}(memory)
 	}
+
+	wg.Wait()
 
 	return nil
 }
 
-func (s *State) singleMemoryRestoreDirtyPages(memory *Memory, pagemap *os.File, memoryFile *os.File) error {
+func (s *State) singleMemoryRestoreDirtyPages(memory *Memory, memoryFile *os.File) error {
 	// 64-bit entries
 	pagemapEntrySize := 8
 	pageSize := int64(os.Getpagesize())
@@ -199,37 +205,63 @@ func (s *State) singleMemoryRestoreDirtyPages(memory *Memory, pagemap *os.File, 
 	numPages := endPage - startPage
 	pagemapStartOffset := startPage * int64(pagemapEntrySize)
 
-	_, err := pagemap.Seek(pagemapStartOffset, 0)
-	if err != nil {
-		return fmt.Errorf("could not seek pid %d pagemap: %s", s.pid, err)
-	}
-
 	var dirty int
-	var currentPageOffset = memory.startOffset
-	var currentByteNum = 0
-	entryBytes := make([]byte, pagemapEntrySize)
-	for i := int64(0); i < numPages; i++ {
-
-		read, err := pagemap.Read(entryBytes)
-		if err != nil || read != pagemapEntrySize {
-			return fmt.Errorf("could not read pid %d pagemap: %s", s.pid, err)
+	var wg sync.WaitGroup
+	parallelism := int64(8)
+	var batchSize int64 = numPages / parallelism
+	var remainder int64 = numPages % parallelism
+	for i := int64(0); i < parallelism; i++ {
+		wg.Add(1)
+		startIndex := i * batchSize
+		endIndex := startIndex + batchSize
+		if i == parallelism-1 {
+			endIndex = endIndex + remainder
 		}
-
-		// 55th bit is soft/dirty bit. Arch is little-endian
-		dirtySet := entryBytes[6] >> 7
-		if dirtySet == byte(1) {
-			dirty++
-			thisPage := memory.content[currentByteNum : currentByteNum+int(pageSize)]
-			read, err = memoryFile.WriteAt(thisPage, currentPageOffset)
-			if err != nil || int64(read) != pageSize {
-				return fmt.Errorf("could not read pid /proc/%d/map: %s", s.pid, err)
+		go func() {
+			pagemap, err := os.OpenFile(fmt.Sprintf("/proc/%d/pagemap", s.pid), os.O_RDONLY, os.ModePerm)
+			if err != nil {
+				log.Errorf("could not open pid %d pagemap: %s", s.pid, err)
 			}
-			// spew.Dump(thisPage)
-		}
+			defer pagemap.Close()
 
-		currentPageOffset += pageSize
-		currentByteNum += int(pageSize)
+			_, err = pagemap.Seek(pagemapStartOffset+(startIndex*int64(pagemapEntrySize)), 0)
+			if err != nil {
+				log.Errorf("could not seek pid %d pagemap: %s", s.pid, err)
+			}
+
+			var sectionOffset = startIndex * pageSize
+			var currentPageOffset = memory.startOffset + sectionOffset
+			var currentByteNum = int(sectionOffset)
+			entryBytes := make([]byte, pagemapEntrySize)
+			for i := startIndex; i < endIndex; i++ {
+
+				read, err := pagemap.Read(entryBytes)
+				if err != nil || read != pagemapEntrySize {
+					log.Errorf("could not read pid %d pagemap: %s", s.pid, err)
+				}
+
+				// 55th bit is soft/dirty bit. Arch is little-endian
+				dirtySet := entryBytes[6] >> 7
+				if dirtySet == byte(1) {
+					dirty++
+					thisPage := memory.content[currentByteNum : currentByteNum+int(pageSize)]
+					read, err = memoryFile.WriteAt(thisPage, currentPageOffset)
+					if err != nil || int64(read) != pageSize {
+						log.Errorf("could not read pid /proc/%d/map: %s", s.pid, err)
+					}
+					// spew.Dump(thisPage)
+				}
+
+				currentPageOffset += pageSize
+				currentByteNum += int(pageSize)
+			}
+
+			wg.Done()
+		}()
+
 	}
+
+	wg.Wait()
 
 	return nil
 }
