@@ -4,13 +4,13 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"math/rand"
 	"net"
 	"os"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -21,19 +21,11 @@ import (
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/oci"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/ostenbom/refunction/worker/ptrace"
+	"github.com/ostenbom/refunction/worker/safewriter"
 	. "github.com/ostenbom/refunction/worker/state"
 	log "github.com/sirupsen/logrus"
 )
-
-type PtraceChannels struct {
-	SignalStop     chan syscall.WaitStatus
-	Continue       chan syscall.Signal
-	HasContinued   chan int
-	Detach         chan int
-	HasDetached    chan int
-	InStopFunction chan func()
-	Error          chan error
-}
 
 type Streams struct {
 	Stdin  *io.PipeWriter
@@ -58,16 +50,8 @@ func NewWorker(id string, client *containerd.Client, runtime, targetSnapshot str
 		ctx:            ctx,
 		creator:        cio.NullIO,
 		snapManager:    snapManager,
-		ptrace: PtraceChannels{
-			SignalStop:     make(chan syscall.WaitStatus, 1),
-			Continue:       make(chan syscall.Signal),
-			HasContinued:   make(chan int),
-			Detach:         make(chan int),
-			HasDetached:    make(chan int),
-			InStopFunction: make(chan func()),
-			Error:          make(chan error),
-		},
-		straceEnabled: false,
+		traceTasks:     make(map[int]*ptrace.TraceTask),
+		straceEnabled:  false,
 	}, nil
 }
 
@@ -90,9 +74,9 @@ type Worker struct {
 	checkpoints    []*State
 	attached       bool
 	attachOptions  []int
-	ptrace         PtraceChannels
+	traceTasks     map[int]*ptrace.TraceTask
 	straceEnabled  bool
-	straceOutput   io.Writer
+	straceOutput   *safewriter.SafeWriter
 	IP             net.IP
 }
 
@@ -171,7 +155,7 @@ func (m *Worker) connectStdPipes() {
 func (m *Worker) WithSyscallTrace(to io.Writer) {
 	m.straceEnabled = true
 	m.attachOptions = append(m.attachOptions, syscall.PTRACE_O_TRACESYSGOOD)
-	m.straceOutput = to
+	m.straceOutput = safewriter.NewSafeWriter(to)
 }
 
 func WithNetNsHook(ipFile string) oci.SpecOpts {
@@ -260,15 +244,36 @@ func (m *Worker) Start() error {
 }
 
 func (m *Worker) Activate() error {
-	m.Attach()
-	m.Continue()
 	m.AwaitMessage("started")
+	m.Attach()
 
 	err := m.TakeCheckpoint()
 	if err != nil {
 		return fmt.Errorf("could not take activation checkpoint: %s", err)
 	}
 
+	return nil
+}
+
+func (m *Worker) Attach() error {
+	taskDirs, err := ioutil.ReadDir(fmt.Sprintf("/proc/%d/task", m.task.Pid()))
+	if err != nil {
+		return fmt.Errorf("could not read task entries: %s", err)
+	}
+
+	for _, t := range taskDirs {
+		tid, err := strconv.Atoi(t.Name())
+		if err != nil {
+			return fmt.Errorf("tid was not int: %s", err)
+		}
+		task, err := ptrace.NewTraceTask(tid, m.Pid(), m.attachOptions, m.straceEnabled, m.straceOutput)
+		if err != nil {
+			return fmt.Errorf("could not create trace task %d: %s", tid, err)
+		}
+		m.traceTasks[tid] = task
+	}
+
+	m.attached = true
 	return nil
 }
 
@@ -297,7 +302,7 @@ func (m *Worker) TakeCheckpoint() error {
 
 	fmt.Printf("checkpoint time: %s", time.Since(checkStart))
 
-	m.ContinueWith(syscall.SIGCONT)
+	m.Continue()
 	return nil
 }
 
@@ -371,7 +376,7 @@ func (m *Worker) SendMessage(messageType string, data interface{}) error {
 func (m *Worker) AwaitSignal(waitingFor syscall.Signal) {
 	var waitStat syscall.WaitStatus
 	for waitStat.StopSignal() != waitingFor {
-		waitStat = <-m.ptrace.SignalStop
+		waitStat = <-m.traceTasks[m.Pid()].SignalStop
 		m.ContinueWith(waitStat.StopSignal())
 	}
 
@@ -382,31 +387,23 @@ func (m *Worker) AwaitSignal(waitingFor syscall.Signal) {
 // before continuing
 func (m *Worker) PauseAtSignal(waitingFor syscall.Signal) {
 	var waitStat syscall.WaitStatus
-	waitStat = <-m.ptrace.SignalStop
+	waitStat = <-m.traceTasks[m.Pid()].SignalStop
 
 	for waitStat.StopSignal() != waitingFor {
 		m.ContinueWith(waitStat.StopSignal())
-		waitStat = <-m.ptrace.SignalStop
+		waitStat = <-m.traceTasks[m.Pid()].SignalStop
 	}
 
-	m.ptrace.SignalStop <- waitStat
+	m.traceTasks[m.Pid()].SignalStop <- waitStat
 	return
 }
 
+// Restore returns process state to first checkpoint
+// Restore takes responsibility for stopping tasks
 func (m *Worker) Restore() error {
-	var stoppedByRestore bool
-	select {
-	case <-m.ptrace.SignalStop:
-		stoppedByRestore = false
-	default:
-		stoppedByRestore = true
-	}
-
-	if stoppedByRestore {
-		err := m.Stop()
-		if err != nil {
-			return fmt.Errorf("could not stop worker for restore: %s", err)
-		}
+	err := m.Stop()
+	if err != nil {
+		return fmt.Errorf("could not stop worker for restore: %s", err)
 	}
 
 	if len(m.checkpoints) <= 0 {
@@ -417,7 +414,7 @@ func (m *Worker) Restore() error {
 
 	start := time.Now()
 
-	err := state.RestoreDirtyPages()
+	err = state.RestoreDirtyPages()
 	if err != nil {
 		return fmt.Errorf("could not restore stack: %s", err)
 	}
@@ -427,41 +424,38 @@ func (m *Worker) Restore() error {
 	}
 	fmt.Printf("restore time: %s", time.Since(start))
 
-	if stoppedByRestore {
-		m.Continue()
-	}
+	m.Continue()
 
 	return nil
 }
 
+// Detach 'es all tasks from ptrace supervision
+// For PTRACE_DETACH to on a task, it must be in a ptrace-stop state
+// Tgkilling the task and supressing injection on detach is a good way to
+// do this.
 func (m *Worker) Detach() error {
-	var err error
-	select {
-	case <-m.ptrace.SignalStop:
-		err = nil
-		break
-	default:
-		err = m.Stop()
-	}
-	if err != nil {
-		return fmt.Errorf("could not stop child for detach: %s", err)
-	}
+	for _, task := range m.traceTasks {
+		// Ensure the task is stopped
+		err := task.Stop()
+		if err != nil {
+			return fmt.Errorf("could not stop child for detach: %s", err)
+		}
 
+		task.Detach <- 1
+		<-task.HasDetached
+	}
 	m.attached = false
-	m.ptrace.Detach <- 1
-	<-m.ptrace.HasDetached
 	return nil
 }
 
 func (m *Worker) Stop() error {
-	err := syscall.Kill(int(m.task.Pid()), syscall.SIGSTOP)
-	if err != nil {
-		return err
+	for _, t := range m.traceTasks {
+		err := t.Stop()
+		if err != nil {
+			return err
+		}
 	}
-
-	stop := <-m.ptrace.SignalStop
-	m.ptrace.SignalStop <- stop
-	return err
+	return nil
 }
 
 func (m *Worker) Continue() {
@@ -469,14 +463,18 @@ func (m *Worker) Continue() {
 }
 
 func (m *Worker) ContinueWith(signal syscall.Signal) {
-	m.ptrace.Continue <- signal
-	<-m.ptrace.HasContinued
+	for tid := range m.traceTasks {
+		m.ContinueTid(tid, signal)
+	}
 }
 
-func (m *Worker) SendSignal(signal syscall.Signal) error {
-	pid := int(m.task.Pid())
+func (m *Worker) ContinueTid(tid int, signal syscall.Signal) {
+	m.traceTasks[tid].Continue <- signal
+	<-m.traceTasks[tid].HasContinued
+}
 
-	err := syscall.Kill(pid, signal)
+func (m *Worker) SendSignalCont(signal syscall.Signal) error {
+	err := m.SendSignal(signal)
 	if err != nil {
 		return err
 	}
@@ -486,25 +484,20 @@ func (m *Worker) SendSignal(signal syscall.Signal) error {
 		return nil
 	}
 
-	<-m.ptrace.SignalStop
+	<-m.traceTasks[m.Pid()].SignalStop
 	m.ContinueWith(signal)
 	return nil
 }
 
-func (m *Worker) GetState() (*State, error) {
-	select {
-	case wait := <-m.ptrace.SignalStop:
-		m.ptrace.SignalStop <- wait
-		break
-	default:
-		err := m.Stop()
-		if err != nil {
-			return nil, fmt.Errorf("could not stop child to get state: %s", err)
-		}
-		defer m.Continue()
-	}
+func (m *Worker) SendSignal(signal syscall.Signal) error {
+	pid := m.Pid()
+	return syscall.Tgkill(pid, pid, signal)
+}
 
-	state, err := NewState(int(m.task.Pid()), m.ptrace.InStopFunction)
+// GetState creates a new instance of the process state.
+// Caller must ensure tasks are stopped
+func (m *Worker) GetState() (*State, error) {
+	state, err := NewState(m.Pid(), m.traceTasks)
 	if err != nil {
 		return nil, fmt.Errorf("could not get state: %s", err)
 	}
@@ -512,19 +505,9 @@ func (m *Worker) GetState() (*State, error) {
 	return state, nil
 }
 
+// SetRegs returns registers to their values in state
+// Caller must ensure tasks are stopped
 func (m *Worker) SetRegs(state *State) error {
-	select {
-	case wait := <-m.ptrace.SignalStop:
-		m.ptrace.SignalStop <- wait
-		break
-	default:
-		err := m.Stop()
-		if err != nil {
-			return fmt.Errorf("could not stop child to set regs: %s", err)
-		}
-		defer m.Continue()
-	}
-
 	err := state.RestoreRegs()
 	if err != nil {
 		return fmt.Errorf("could not set regs: %s", err)
@@ -534,7 +517,7 @@ func (m *Worker) SetRegs(state *State) error {
 }
 
 func (m *Worker) ClearMemRefs() error {
-	pid := int(m.task.Pid())
+	pid := m.Pid()
 	f, err := os.OpenFile(fmt.Sprintf("/proc/%d/clear_refs", pid), os.O_WRONLY, 0)
 	if err != nil {
 		return fmt.Errorf("could not open clear_refs for pid %d: %s", pid, err)
@@ -556,49 +539,8 @@ func (m *Worker) ListImages() ([]containerd.Image, error) {
 	return m.client.ListImages(m.ctx)
 }
 
-func (m *Worker) Pid() (uint32, error) {
-	if m.task == nil {
-		return 0, errors.New("child not initialized")
-	}
-
-	return m.task.Pid(), nil
-}
-
-func (m *Worker) PrintStack() error {
-	return m.printProcFile("stack")
-}
-
-func (m *Worker) PrintMaps() error {
-	return m.printProcFile("maps")
-}
-
-func (m *Worker) printProcFile(fileName string) error {
-	stack, err := ioutil.ReadFile(fmt.Sprintf("/proc/%d/%s", int(m.task.Pid()), fileName))
-	if err != nil {
-		return fmt.Errorf("could not read child /proc/pid/%s file: %s", fileName, err)
-	}
-
-	fmt.Println(string(stack))
-	return nil
-}
-
-func (m *Worker) PrintRegs() error {
-	// TODO
-	// err := m.Stop()
-	// if err != nil {
-	// 	return fmt.Errorf("could not stop child for regs print: %s", err)
-	// }
-	// defer m.Continue()
-	//
-	// var regs syscall.PtraceRegs
-	// err = syscall.PtraceGetRegs(int(m.task.Pid()), &regs)
-	// if err != nil {
-	// 	return fmt.Errorf("could not get regs: %s", err)
-	// }
-	//
-	// fmt.Printf("Regs: %+v\n", regs)
-
-	return nil
+func (m *Worker) Pid() int {
+	return int(m.task.Pid())
 }
 
 func (m *Worker) End() error {

@@ -11,7 +11,7 @@ import (
 	. "github.com/ostenbom/refunction/worker"
 )
 
-var _ = Describe("Java Serverless Function Management", func() {
+var _ = XDescribe("Java Serverless Function Management", func() {
 	var id string
 	runtime := "java"
 	var targetLayer string

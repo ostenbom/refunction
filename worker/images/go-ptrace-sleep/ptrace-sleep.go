@@ -1,13 +1,21 @@
 package main
 
 import (
+	"bufio"
+	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"strconv"
 	"syscall"
 	"time"
 )
+
+type Message struct {
+	Type string `json:"type"`
+	Data string `json:"data"`
+}
 
 func main() {
 	// Allow graceful stopping
@@ -19,23 +27,30 @@ func main() {
 		os.Exit(0)
 	}()
 
-	// Signal to exit busy loop
-	readySig := make(chan os.Signal, 1)
-	signal.Notify(readySig, syscall.SIGUSR1)
+	startedMessage := Message{
+		Type: "started",
+		Data: "",
+	}
+	messageJSON, err := json.Marshal(startedMessage)
+	if err != nil {
+		panic("could not marshal message")
+	}
+	fmt.Println(string(messageJSON))
 
-	ready := false
-	go func() {
-		<-readySig
-		ready = true
-	}()
-
-	_, _, err := syscall.Syscall(syscall.SYS_PTRACE, syscall.PTRACE_TRACEME, 0, 0)
-	if err != 0 {
-		panic(err)
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		var message Message
+		err := json.Unmarshal(scanner.Bytes(), &message)
+		if err != nil {
+			continue
+		}
+		if message.Type == "go" {
+			break
+		}
 	}
 
-	for !ready {
-		time.Sleep(10)
+	if err := scanner.Err(); err != nil {
+		log.Println(err)
 	}
 
 	f, openErr := os.OpenFile("/tmp/count.txt", os.O_CREATE|os.O_TRUNC|os.O_APPEND|os.O_WRONLY, 0600)

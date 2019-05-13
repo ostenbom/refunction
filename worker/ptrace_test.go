@@ -37,8 +37,7 @@ var _ = Describe("Worker Manager using python runtime", func() {
 		})
 
 		It("creates a child with a pid", func() {
-			pid, err := worker.Pid()
-			Expect(err).NotTo(HaveOccurred())
+			pid := worker.Pid()
 			Expect(pid >= 0)
 		})
 
@@ -53,11 +52,10 @@ var _ = Describe("Worker Manager using python runtime", func() {
 		It("creates the count file after SIGUSR1", func() {
 			Expect(worker.Attach()).To(Succeed())
 			defer worker.Detach()
-			worker.Continue()
 			worker.AwaitSignal(syscall.SIGUSR2)
 
 			// Send custom "ready" signal to container
-			err := worker.SendSignal(syscall.SIGUSR1)
+			err := worker.SendSignalCont(syscall.SIGUSR1)
 			Expect(err).NotTo(HaveOccurred())
 
 			countLocation := getRootfs(worker) + "tmp/count.txt"
@@ -79,13 +77,13 @@ var _ = Describe("Worker Manager using python runtime", func() {
 			Expect(worker.Detach()).To(Succeed())
 		})
 
-		It("is in a stopped state after attaching", func() {
+		It("is in a ptrace-stopped state after attaching and sending signal", func() {
 			Expect(worker.Attach()).To(Succeed())
 			defer worker.Detach()
 
-			pid, err := worker.Pid()
-			Expect(err).NotTo(HaveOccurred())
+			pid := worker.Pid()
 
+			Expect(worker.SendSignal(syscall.SIGSTOP)).To(Succeed())
 			processState := getPidState(pid)
 
 			// t = stopped by debugger. T = stopped by signal
@@ -96,10 +94,10 @@ var _ = Describe("Worker Manager using python runtime", func() {
 		It("creates a count file if allowed to continue, given SIGUSR1", func() {
 			Expect(worker.Attach()).To(Succeed())
 			defer worker.Detach()
-			worker.Continue()
+
 			worker.AwaitSignal(syscall.SIGUSR2)
 
-			err := worker.SendSignal(syscall.SIGUSR1)
+			err := worker.SendSignalCont(syscall.SIGUSR1)
 			Expect(err).NotTo(HaveOccurred())
 
 			countLocation := getRootfs(worker) + "tmp/count.txt"
@@ -135,8 +133,7 @@ var _ = Describe("Worker Manager using c-sigusr-sleep image", func() {
 		})
 
 		It("creates a child with a pid", func() {
-			pid, err := worker.Pid()
-			Expect(err).NotTo(HaveOccurred())
+			pid := worker.Pid()
 			Expect(pid >= 0)
 		})
 
@@ -150,7 +147,7 @@ var _ = Describe("Worker Manager using c-sigusr-sleep image", func() {
 
 		It("creates the count file after SIGUSR1", func() {
 			// Send custom "ready" signal to container
-			err := worker.SendSignal(syscall.SIGUSR1)
+			err := worker.SendSignalCont(syscall.SIGUSR1)
 			Expect(err).NotTo(HaveOccurred())
 
 			countLocation := getRootfs(worker) + "tmp/count.txt"
@@ -172,25 +169,31 @@ var _ = Describe("Worker Manager using c-sigusr-sleep image", func() {
 			Expect(worker.Detach()).To(Succeed())
 		})
 
-		It("is in a stopped state after attaching", func() {
+		It("is in a ptrace-stop state after attach and signal", func() {
 			Expect(worker.Attach()).To(Succeed())
 			defer worker.Detach()
 
-			pid, err := worker.Pid()
+			err := worker.SendSignalCont(syscall.SIGUSR1)
 			Expect(err).NotTo(HaveOccurred())
 
+			pid := worker.Pid()
+			Expect(err).NotTo(HaveOccurred())
+
+			worker.SendSignal(syscall.SIGSTOP)
+			// worker.PauseAtSignal(syscall.SIGSTOP)
 			processState := getPidState(pid)
 
 			// t = stopped by debugger. T = stopped by signal
 			Expect(strings.Contains(processState, "t")).To(BeTrue())
+
+			// time.Sleep(time.Second * 30)
 		})
 
 		It("creates a count file if allowed to continue, given SIGUSR1", func() {
 			Expect(worker.Attach()).To(Succeed())
 			defer worker.Detach()
-			worker.Continue()
 
-			err := worker.SendSignal(syscall.SIGUSR1)
+			err := worker.SendSignalCont(syscall.SIGUSR1)
 			Expect(err).NotTo(HaveOccurred())
 
 			countLocation := getRootfs(worker) + "tmp/count.txt"
@@ -231,8 +234,7 @@ var _ = Describe("Worker Manager using go-ptrace-sleep image", func() {
 		})
 
 		It("creates a child with a pid", func() {
-			pid, err := manager.Pid()
-			Expect(err).NotTo(HaveOccurred())
+			pid := manager.Pid()
 			Expect(pid >= 0)
 		})
 
@@ -244,9 +246,9 @@ var _ = Describe("Worker Manager using go-ptrace-sleep image", func() {
 			}
 		})
 
-		It("creates the count file after SIGUSR1", func() {
-			// Send custom "ready" signal to container
-			err := manager.SendSignal(syscall.SIGUSR1)
+		It("creates the count file after go message", func() {
+			manager.AwaitMessage("started")
+			err := manager.SendMessage("go", "")
 			Expect(err).NotTo(HaveOccurred())
 
 			countLocation := getRootfs(manager) + "tmp/count.txt"
@@ -268,13 +270,13 @@ var _ = Describe("Worker Manager using go-ptrace-sleep image", func() {
 			Expect(manager.Detach()).To(Succeed())
 		})
 
-		It("is in a stopped state after attaching", func() {
+		It("is in a stopped state after attaching and sending a signal", func() {
 			Expect(manager.Attach()).To(Succeed())
 			defer manager.Detach()
 
-			pid, err := manager.Pid()
-			Expect(err).NotTo(HaveOccurred())
+			pid := manager.Pid()
 
+			Expect(manager.SendSignal(syscall.SIGSTOP)).To(Succeed())
 			processState := getPidState(pid)
 
 			// t = stopped by debugger. T = stopped by signal
@@ -284,7 +286,7 @@ var _ = Describe("Worker Manager using go-ptrace-sleep image", func() {
 
 })
 
-func getPidState(pid uint32) string {
+func getPidState(pid int) string {
 	psArgs := []string{"-p", strconv.Itoa(int(pid)), "-o", "stat="}
 	processState, err := exec.Command("ps", psArgs...).Output()
 	Expect(err).NotTo(HaveOccurred())

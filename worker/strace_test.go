@@ -42,7 +42,7 @@ var _ = Describe("Worker Manager syscall tracing c-sigusr-sleep image", func() {
 	It("prints syscalls", func() {
 		Expect(worker.Attach()).To(Succeed())
 		defer worker.Detach()
-		worker.ContinueWith(syscall.SIGUSR1)
+		worker.SendSignalCont(syscall.SIGUSR1)
 
 		countLocation := getRootfs(worker) + "tmp/count.txt"
 		Eventually(func() bool {

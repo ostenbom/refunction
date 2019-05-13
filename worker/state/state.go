@@ -2,31 +2,61 @@ package state
 
 import (
 	"fmt"
+	"sync"
 	"syscall"
+
+	"github.com/ostenbom/refunction/worker/ptrace"
 )
+
+type TaskRegState struct {
+	tid          int
+	regs         *syscall.PtraceRegs
+	functionChan chan func(*ptrace.TraceTask)
+}
 
 type State struct {
 	pid             int
-	registers       syscall.PtraceRegs
+	registers       map[int]TaskRegState
 	memoryLocations []*Memory
 	fileDescriptors []*FileDescriptor
 	rlimits         Rlimits
-	stoppedFunction chan func()
 }
 
 //NewState caller must ensure process stopped before getting state
-func NewState(pid int, stoppedFunction chan func()) (*State, error) {
+func NewState(pid int, tasks map[int]*ptrace.TraceTask) (*State, error) {
 	var state State
+	state.registers = make(map[int]TaskRegState)
 
-	state.stoppedFunction = stoppedFunction
-	done := make(chan error)
-	stoppedFunction <- func() {
-		err := syscall.PtraceGetRegs(pid, &state.registers)
-		done <- err
+	errors := make(chan error)
+	results := make(chan TaskRegState, len(tasks))
+	var wg sync.WaitGroup
+	for _, task := range tasks {
+		wg.Add(1)
+		task.InStopFunction <- func(t *ptrace.TraceTask) {
+			defer wg.Done()
+			var regs syscall.PtraceRegs
+			err := syscall.PtraceGetRegs(t.Tid, &regs)
+			if err != nil {
+				errors <- err
+			}
+			results <- TaskRegState{
+				tid:          t.Tid,
+				regs:         &regs,
+				functionChan: t.InStopFunction,
+			}
+		}
 	}
-	err := <-done
-	if err != nil {
+	wg.Wait()
+	close(results)
+	select {
+	case err := <-errors:
 		return nil, fmt.Errorf("could not get regs: %s", err)
+	default:
+		break
+	}
+
+	for result := range results {
+		state.registers[result.tid] = result
 	}
 
 	memoryLocations, err := newMemoryLocations(pid)
@@ -53,18 +83,29 @@ func NewState(pid int, stoppedFunction chan func()) (*State, error) {
 }
 
 func (s *State) RestoreRegs() error {
-	done := make(chan error)
-	s.stoppedFunction <- func() {
-		err := syscall.PtraceSetRegs(s.pid, &s.registers)
-		done <- err
+	errors := make(chan error)
+	var wg sync.WaitGroup
+	for tid := range s.registers {
+		wg.Add(1)
+		regState := s.registers[tid]
+		regState.functionChan <- func(t *ptrace.TraceTask) {
+			defer wg.Done()
+			err := syscall.PtraceSetRegs(t.Tid, regState.regs)
+			if err != nil {
+				errors <- err
+			}
+		}
 	}
-	err := <-done
-	if err != nil {
+	wg.Wait()
+	select {
+	case err := <-errors:
 		return fmt.Errorf("could not set regs: %s", err)
+	default:
+		break
 	}
 	return nil
 }
 
 func (s *State) PC() uint64 {
-	return s.registers.PC()
+	return s.registers[s.pid].regs.PC()
 }

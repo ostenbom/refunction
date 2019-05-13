@@ -41,6 +41,7 @@ var _ = Describe("Worker Manager checkpointing", func() {
 
 		It("can get the processes limits", func() {
 			Expect(worker.Attach()).To(Succeed())
+			Expect(worker.Stop()).To(Succeed())
 			state, err := worker.GetState()
 			Expect(err).NotTo(HaveOccurred())
 
@@ -63,6 +64,7 @@ var _ = Describe("Worker Manager checkpointing", func() {
 
 			It("can clear memory refs", func() {
 				Expect(worker.Attach()).To(Succeed())
+				Expect(worker.Stop()).To(Succeed())
 				Expect(worker.ClearMemRefs()).To(Succeed())
 
 				state, err := worker.GetState()
@@ -81,6 +83,7 @@ var _ = Describe("Worker Manager checkpointing", func() {
 
 			It("knows when the heap has been modified", func() {
 				Expect(worker.Attach()).To(Succeed())
+				Expect(worker.Stop()).To(Succeed())
 				Expect(worker.ClearMemRefs()).To(Succeed())
 				worker.Continue()
 
@@ -107,11 +110,13 @@ var _ = Describe("Worker Manager checkpointing", func() {
 
 			It("can notice a variable change the stack", func() {
 				Expect(worker.Attach()).To(Succeed())
+				Expect(worker.Stop()).To(Succeed())
 				Expect(worker.ClearMemRefs()).To(Succeed())
 				worker.Continue()
 
 				// loop ticks every 50ms
 				time.Sleep(time.Millisecond * 60)
+				Expect(worker.Stop()).To(Succeed())
 				state, err := worker.GetState()
 				Expect(err).NotTo(HaveOccurred())
 
@@ -126,6 +131,7 @@ var _ = Describe("Worker Manager checkpointing", func() {
 				// loop ticks every 50ms
 				time.Sleep(time.Millisecond * 60)
 				Expect(worker.Attach()).To(Succeed())
+				Expect(worker.Stop()).To(Succeed())
 				defer worker.Detach()
 
 				state, err := worker.GetState()
@@ -139,6 +145,7 @@ var _ = Describe("Worker Manager checkpointing", func() {
 
 			It("has no memory region changes", func() {
 				Expect(worker.Attach()).To(Succeed())
+				Expect(worker.Stop()).To(Succeed())
 				defer worker.Detach()
 
 				state, err := worker.GetState()
@@ -154,6 +161,7 @@ var _ = Describe("Worker Manager checkpointing", func() {
 
 			It("has three file descriptors", func() {
 				Expect(worker.Attach()).To(Succeed())
+				Expect(worker.Stop()).To(Succeed())
 				defer worker.Detach()
 
 				state, err := worker.GetState()
@@ -165,6 +173,7 @@ var _ = Describe("Worker Manager checkpointing", func() {
 
 			It("has no changes in files", func() {
 				Expect(worker.Attach()).To(Succeed())
+				Expect(worker.Stop()).To(Succeed())
 				defer worker.Detach()
 
 				state, err := worker.GetState()
@@ -180,6 +189,7 @@ var _ = Describe("Worker Manager checkpointing", func() {
 
 			It("has a program counter", func() {
 				Expect(worker.Attach()).To(Succeed())
+				Expect(worker.Stop()).To(Succeed())
 				defer worker.Detach()
 
 				state, err := worker.GetState()
@@ -195,6 +205,7 @@ var _ = Describe("Worker Manager checkpointing", func() {
 
 			It("notices when the process changes memory regions", func() {
 				Expect(worker.Attach()).To(Succeed())
+				Expect(worker.Stop()).To(Succeed())
 				defer worker.Detach()
 
 				state, err := worker.GetState()
@@ -216,6 +227,7 @@ var _ = Describe("Worker Manager checkpointing", func() {
 
 			It("notices changes in files", func() {
 				Expect(worker.Attach()).To(Succeed())
+				Expect(worker.Stop()).To(Succeed())
 				defer worker.Detach()
 
 				state, err := worker.GetState()

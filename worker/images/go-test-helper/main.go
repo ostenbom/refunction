@@ -23,18 +23,19 @@ func main() {
 	}
 
 	worker := NewLocalWorker("local-serverless-function", uint32(pid))
-	wPid, _ := worker.Pid()
+	wPid := worker.Pid()
 
 	worker.WithSyscallTrace(os.Stdout)
 
 	fmt.Printf("pid taken as %s, %d\n", pidString, wPid)
 
-	err = worker.Activate()
+	err = worker.Attach()
 	if err != nil {
 		panic(err)
 	}
+	defer worker.Detach()
 
-	fmt.Println("activated")
+	fmt.Println("attached")
 
 	buf := bufio.NewReader(os.Stdin)
 	fmt.Print("> NEXT IS END SERVER")
@@ -57,11 +58,11 @@ func main() {
 	// 	panic("req != resp")
 	// }
 	//
-	err = worker.SendSignal(syscall.SIGUSR2)
+	err = worker.SendSignal(syscall.SIGUSR1)
 	if err != nil {
 		panic(err)
 	}
-	worker.AwaitSignal(syscall.SIGUSR2)
+	// worker.AwaitSignal(syscall.SIGUSR2)
 
 	// err = worker.TakeCheckpoint()
 	// if err != nil {

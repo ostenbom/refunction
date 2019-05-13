@@ -6,7 +6,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -50,6 +49,7 @@ var _ = Describe("Worker Restoring", func() {
 				WaitFileExists(countLocation)
 
 				Expect(worker.Attach()).To(Succeed())
+				Expect(worker.Stop()).To(Succeed())
 				defer worker.Detach()
 
 				// Work out what will be printed next
@@ -90,6 +90,7 @@ var _ = Describe("Worker Restoring", func() {
 				WaitFileExists(countLocation)
 
 				Expect(worker.Attach()).To(Succeed())
+				Expect(worker.Stop()).To(Succeed())
 				defer worker.Detach()
 
 				// Work out what will be printed next
@@ -102,8 +103,10 @@ var _ = Describe("Worker Restoring", func() {
 
 				// Let run, restore
 				time.Sleep(time.Millisecond * 60)
+				Expect(worker.Stop()).To(Succeed())
 				err = worker.SetRegs(state)
 				Expect(err).NotTo(HaveOccurred())
+				worker.Continue()
 
 				// Let run, check variable was restored
 				time.Sleep(time.Millisecond * 60)
@@ -126,6 +129,7 @@ var _ = Describe("Worker Restoring", func() {
 				WaitFileExists(countLocation)
 
 				Expect(worker.Attach()).To(Succeed())
+				Expect(worker.Stop()).To(Succeed())
 				defer worker.Detach()
 
 				// Work out what will be printed next
@@ -166,6 +170,7 @@ var _ = Describe("Worker Restoring", func() {
 				WaitFileExists(countLocation)
 
 				Expect(worker.Attach()).To(Succeed())
+				Expect(worker.Stop()).To(Succeed())
 				defer worker.Detach()
 
 				// Work out what will be printed next
@@ -205,9 +210,6 @@ var _ = Describe("Worker Restoring", func() {
 				// Initiate python ready sequence
 				Expect(worker.Attach()).To(Succeed())
 				defer worker.Detach()
-				worker.Continue()
-				worker.AwaitSignal(syscall.SIGUSR2)
-				Expect(worker.SendSignal(syscall.SIGUSR1)).To(Succeed())
 
 				countLocation := getRootfs(worker) + "/tmp/count.txt"
 				WaitFileExists(countLocation)
@@ -235,6 +237,52 @@ var _ = Describe("Worker Restoring", func() {
 				worker.Continue()
 
 				// Let run, check variable was restored
+				time.Sleep(time.Millisecond * 60)
+				Expect(worker.Stop()).To(Succeed())
+				countContent, err := ioutil.ReadFile(countLocation)
+				Expect(err).NotTo(HaveOccurred())
+				numberPrintedIncrements := strings.Count(string(countContent), incrementedLine)
+				Expect(numberPrintedIncrements).To(Equal(2))
+			})
+		})
+
+		Context("when a python program runs multiple threads", func() {
+			BeforeEach(func() {
+				runtime = "python"
+				targetLayer = "threads.py"
+			})
+
+			It("can restore both threads", func() {
+				countLocation := getRootfs(worker) + "/tmp/count.txt"
+				WaitFileExists(countLocation)
+				// Initiate python ready sequence
+				Expect(worker.Attach()).To(Succeed())
+				defer worker.Detach()
+
+				time.Sleep(time.Millisecond * 60)
+				Expect(worker.Stop()).To(Succeed())
+
+				// Work out what will be printed next
+				incrementedLine := CalculateNextCountLine(countLocation)
+
+				// Get first state
+				state, err := worker.GetState()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(state.SaveWritablePages()).To(Succeed())
+				Expect(worker.ClearMemRefs()).To(Succeed())
+
+				worker.Continue()
+
+				// Let run, restore
+				time.Sleep(time.Millisecond * 60)
+				Expect(worker.Stop()).To(Succeed())
+				start := time.Now()
+				Expect(state.RestoreDirtyPages()).To(Succeed())
+				Expect(state.RestoreRegs()).To(Succeed())
+				fmt.Printf("restore time: %s\n", time.Since(start))
+
+				// Let run, check variable was restored
+				worker.Continue()
 				time.Sleep(time.Millisecond * 60)
 				Expect(worker.Stop()).To(Succeed())
 				countContent, err := ioutil.ReadFile(countLocation)
