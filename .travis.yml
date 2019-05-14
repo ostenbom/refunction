@@ -29,4 +29,4 @@ install:
   - go build ./...
   - ./getruntimes/download_runtimes.sh
 
-script: sudo env "PATH=$PATH" ginkgo -r --randomizeAllSpecs --randomizeSuites
+script: sudo env "PATH=$PATH" ginkgo -r --randomizeAllSpecs --randomizeSuites -nodes=2
