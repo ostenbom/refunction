@@ -23,12 +23,16 @@ const defaultFunctionDBName = "whisk_local_whisks"
 func startInvoker() int {
 	var (
 		couchAddress string
+		activationDB string
+		functionDB   string
 		kafkaAddress string
 	)
 
 	invokerIDPtr := flag.Int("id", -1, "unique id for the invoker")
 
 	flag.StringVar(&couchAddress, "couch", defaultCouchDBAddress, "couch db address")
+	flag.StringVar(&activationDB, "activationdb", defaultCouchDBAddress, "couch activation db name")
+	flag.StringVar(&functionDB, "functiondb", defaultCouchDBAddress, "couch function db name")
 	flag.StringVar(&kafkaAddress, "kafka", defaultKafkaAddress, "kafka address")
 	flag.Parse()
 
@@ -49,7 +53,7 @@ func startInvoker() int {
 
 	log.Debug("Messenger initialized")
 
-	functionStorage, err := storage.NewFunctionStorage(couchAddress, defaultFunctionDBName, defaultActivationDBName)
+	functionStorage, err := storage.NewFunctionStorage(couchAddress, functionDB, activationDB)
 	if err != nil {
 		printError(fmt.Errorf("could not establish couch connection: %s", err))
 		return 1
