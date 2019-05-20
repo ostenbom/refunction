@@ -170,6 +170,23 @@ func WithNetNsHook(ipFile string) oci.SpecOpts {
 	}
 }
 
+func WithDefaultMemoryLimit(_ context.Context, _ oci.Client, _ *containers.Container, s *oci.Spec) error {
+	if s.Linux == nil {
+		s.Linux = &specs.Linux{}
+	}
+	if s.Linux.Resources == nil {
+		s.Linux.Resources = &specs.LinuxResources{}
+	}
+	if s.Linux.Resources.Memory == nil {
+		s.Linux.Resources.Memory = &specs.LinuxMemory{}
+	}
+
+	var defaultMemoryLimit int64 = 256 * 1024 * 1024 // 256MB default worker memory limit
+	s.Linux.Resources.Memory.Limit = &defaultMemoryLimit
+
+	return nil
+}
+
 func (m *Worker) Start() error {
 	err := m.snapManager.CreateLayerFromBase(m.targetSnapshot)
 	if err != nil {
@@ -205,7 +222,7 @@ func (m *Worker) Start() error {
 		m.ctx,
 		m.ContainerID,
 		containerd.WithSnapshot(m.ContainerID),
-		containerd.WithNewSpec(WithNetNsHook(ipFileName), oci.WithProcessArgs(processArgs...)),
+		containerd.WithNewSpec(WithNetNsHook(ipFileName), oci.WithProcessArgs(processArgs...), WithDefaultMemoryLimit),
 	)
 	if err != nil {
 		return fmt.Errorf("could not create worker container: %s", err)
