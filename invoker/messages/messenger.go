@@ -9,7 +9,6 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const defaultKafkaAddress = "172.17.0.1:9093"
 const healthTopic = "health"
 const twoGigMem = "2147483648 B"
 
@@ -24,9 +23,9 @@ type Messenger struct {
 	name          types.Name
 }
 
-func NewMessenger(invokerNumber int) (*Messenger, error) {
+func NewMessenger(invokerNumber int, kafkaAddress string) (*Messenger, error) {
 	invokerTopic := fmt.Sprintf("invoker%d", invokerNumber)
-	provider, err := NewMessageProvider(defaultKafkaAddress)
+	provider, err := NewMessageProvider(kafkaAddress)
 	if err != nil {
 		return nil, err
 	}

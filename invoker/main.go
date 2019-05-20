@@ -16,12 +16,20 @@ import (
 )
 
 const defaultCouchDBAddress = "http://admin:specialsecretpassword@127.0.0.1:5984"
+const defaultKafkaAddress = "172.17.0.1:9093"
 const defaultActivationDBName = "whisk_local_activations"
 const defaultFunctionDBName = "whisk_local_whisks"
 
 func startInvoker() int {
+	var (
+		couchAddress string
+		kafkaAddress string
+	)
 
 	invokerIDPtr := flag.Int("id", -1, "unique id for the invoker")
+
+	flag.StringVar(&couchAddress, "couch", defaultCouchDBAddress, "couch db address")
+	flag.StringVar(&kafkaAddress, "kafka", defaultKafkaAddress, "kafka address")
 	flag.Parse()
 
 	if *invokerIDPtr < 0 {
@@ -32,7 +40,7 @@ func startInvoker() int {
 	log.Info(fmt.Sprintf("Invoker with id: %s starting", invokerID))
 
 	invokerNumber := *invokerIDPtr
-	messenger, err := messages.NewMessenger(invokerNumber)
+	messenger, err := messages.NewMessenger(invokerNumber, kafkaAddress)
 	if err != nil {
 		printError(err)
 		return 1
@@ -41,7 +49,7 @@ func startInvoker() int {
 
 	log.Debug("Messenger initialized")
 
-	functionStorage, err := storage.NewFunctionStorage(defaultCouchDBAddress, defaultFunctionDBName, defaultActivationDBName)
+	functionStorage, err := storage.NewFunctionStorage(couchAddress, defaultFunctionDBName, defaultActivationDBName)
 	if err != nil {
 		printError(fmt.Errorf("could not establish couch connection: %s", err))
 		return 1
