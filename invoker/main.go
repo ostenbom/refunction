@@ -20,12 +20,16 @@ const defaultKafkaAddress = "172.17.0.1:9093"
 const defaultActivationDBName = "whisk_local_activations"
 const defaultFunctionDBName = "whisk_local_whisks"
 
+const defaultWorkerPoolSize = 4
+
 func startInvoker() int {
 	var (
 		couchAddress string
 		activationDB string
 		functionDB   string
 		kafkaAddress string
+
+		workerPoolSize int
 	)
 
 	invokerIDPtr := flag.Int("id", -1, "unique id for the invoker")
@@ -34,6 +38,7 @@ func startInvoker() int {
 	flag.StringVar(&activationDB, "activationdb", defaultCouchDBAddress, "couch activation db name")
 	flag.StringVar(&functionDB, "functiondb", defaultCouchDBAddress, "couch function db name")
 	flag.StringVar(&kafkaAddress, "kafka", defaultKafkaAddress, "kafka address")
+	flag.IntVar(&workerPoolSize, "poolsize", defaultWorkerPoolSize, "worker pool size")
 	flag.Parse()
 
 	if *invokerIDPtr < 0 {
@@ -67,7 +72,7 @@ func startInvoker() int {
 	}()
 
 	// Start fixed group of workers.
-	workers, err := workerpool.NewWorkerPool(4)
+	workers, err := workerpool.NewWorkerPool(workerPoolSize)
 	if err != nil {
 		printError(err)
 		return 1
