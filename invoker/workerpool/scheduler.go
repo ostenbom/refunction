@@ -97,7 +97,8 @@ func (p *WorkerPool) Run(function *types.FunctionDoc, request interface{}) (inte
 		return result, err
 	} else {
 		p.scheduler.mux.Unlock()
-		return "", fmt.Errorf("no containers available")
+		p.scheduler.ForceDecomission()
+		return p.Run(function, request)
 	}
 }
 
@@ -149,9 +150,23 @@ func (s *Scheduler) ScheduleDecommission(name string, schedulable *ScheduleWorke
 					}
 				}
 				if nameIndex < 0 {
-					// Must still be running
-					s.mux.Unlock()
-					continue
+					// Either forced eviction or still running
+					nameIndex := -1
+					for i, w := range s.undeployed {
+						if w == name {
+							nameIndex = i
+							break
+						}
+					}
+					if nameIndex < 0 {
+						// Must still be running
+						s.mux.Unlock()
+						continue
+					} else {
+						// Must have been evicted
+						s.mux.Unlock()
+						return
+					}
 				}
 
 				s.deployed = append(s.deployed[:nameIndex], s.deployed[nameIndex+1:]...)
@@ -171,6 +186,23 @@ func (s *Scheduler) ScheduleDecommission(name string, schedulable *ScheduleWorke
 
 		}
 	}()
+}
+
+func (s *Scheduler) ForceDecomission() {
+	var toDecomission string
+	s.mux.Lock()
+	toDecomission, s.deployed = s.deployed[0], s.deployed[1:]
+	s.mux.Unlock()
+
+	err := s.workers[toDecomission].Decomission()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, fmt.Sprintf("Hung container!: could not force decomission: %s", err))
+		return
+	}
+
+	s.mux.Lock()
+	s.undeployed = append(s.undeployed, toDecomission)
+	s.mux.Unlock()
 }
 
 func (sw *ScheduleWorker) Decomission() error {
