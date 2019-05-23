@@ -3,6 +3,7 @@ package workerpool
 import (
 	"archive/tar"
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/burntsushi/toml"
 	"github.com/containerd/containerd"
+	"github.com/containerd/containerd/namespaces"
 	"github.com/ostenbom/refunction/worker"
 	"github.com/ostenbom/refunction/worker/containerdrunner"
 )
@@ -57,9 +59,20 @@ func NewWorkerPool(runtime string, target string, size int) (*WorkerPool, error)
 		return nil, fmt.Errorf("could not connect to containerd client: %s", err)
 	}
 
+	ctx := namespaces.WithNamespace(context.Background(), "refunction-workerpool")
+	snapManager, err := worker.NewSnapshotManager(ctx, client, runtime)
+	if err != nil {
+		return nil, err
+	}
+
+	err = snapManager.CreateLayerFromBase(target)
+	if err != nil {
+		return nil, err
+	}
+
 	workers := make([]*worker.Worker, size)
 	for i := 0; i < size; i++ {
-		w, err := worker.NewWorker(strconv.Itoa(i), client, runtime, target)
+		w, err := worker.NewWorkerWithSnapManager(strconv.Itoa(i), client, runtime, target, snapManager, ctx)
 		if err != nil {
 			return nil, fmt.Errorf("could not start worker in pool: %s", err)
 		}

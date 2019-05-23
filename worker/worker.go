@@ -41,6 +41,16 @@ func NewWorker(id string, client *containerd.Client, runtime, targetSnapshot str
 		return nil, err
 	}
 
+	err = snapManager.CreateLayerFromBase(targetSnapshot)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewWorkerWithSnapManager(id, client, runtime, targetSnapshot, snapManager, ctx)
+}
+
+func NewWorkerWithSnapManager(id string, client *containerd.Client, runtime, targetSnapshot string, snapManager *SnapshotManager, ctx context.Context) (*Worker, error) {
+
 	return &Worker{
 		ID:             id,
 		targetSnapshot: targetSnapshot,
@@ -188,13 +198,8 @@ func WithDefaultMemoryLimit(_ context.Context, _ oci.Client, _ *containers.Conta
 }
 
 func (m *Worker) Start() error {
-	err := m.snapManager.CreateLayerFromBase(m.targetSnapshot)
-	if err != nil {
-		return err
-	}
-
 	m.ContainerID = fmt.Sprintf("%s-%s-%d", m.targetSnapshot, m.ID, rand.Intn(100))
-	_, err = m.snapManager.GetRwMounts(m.targetSnapshot, m.ContainerID)
+	_, err := m.snapManager.GetRwMounts(m.targetSnapshot, m.ContainerID)
 	if err != nil {
 		return err
 	}
