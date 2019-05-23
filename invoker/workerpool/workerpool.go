@@ -20,9 +20,6 @@ import (
 	"github.com/ostenbom/refunction/worker/containerdrunner"
 )
 
-const defaultRuntime = "python"
-const defaultTarget = "serverless-function.py"
-
 type WorkerPool struct {
 	workers   []*worker.Worker
 	server    *exec.Cmd
@@ -32,19 +29,19 @@ type WorkerPool struct {
 	scheduler *Scheduler
 }
 
-func NewWorkerPool(size int) (*WorkerPool, error) {
+func NewWorkerPool(runtime string, target string, size int) (*WorkerPool, error) {
 	runDir, err := ioutil.TempDir("", "refunction")
 	if err != nil {
 		return nil, fmt.Errorf("could not create temp dir for worker pool: %s", err)
 	}
 
 	cacheDir := "/var/cache/refunction"
-	err = ensureRuntimes([]string{defaultRuntime}, cacheDir)
+	err = ensureRuntimes([]string{runtime}, cacheDir)
 	if err != nil {
 		return nil, err
 	}
 
-	err = ensureLayers([]string{defaultTarget}, cacheDir)
+	err = ensureLayers([]string{target}, cacheDir)
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +59,7 @@ func NewWorkerPool(size int) (*WorkerPool, error) {
 
 	workers := make([]*worker.Worker, size)
 	for i := 0; i < size; i++ {
-		w, err := worker.NewWorker(strconv.Itoa(i), client, defaultRuntime, defaultTarget)
+		w, err := worker.NewWorker(strconv.Itoa(i), client, runtime, target)
 		if err != nil {
 			return nil, fmt.Errorf("could not start worker in pool: %s", err)
 		}

@@ -1,0 +1,11 @@
+# poolsize = 8
+# runtime = "python"
+# target_layer = "serverless-function.py"
+
+[kafka]
+# address = "somekafkaaddr"
+
+[couch]
+# address = "somecouchaddr"
+# activation_db = "test_activations"
+# function_db = "test_whisks"

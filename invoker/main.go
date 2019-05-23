@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/burntsushi/toml"
 	"github.com/ostenbom/refunction/invoker/messages"
 	"github.com/ostenbom/refunction/invoker/storage"
 	"github.com/ostenbom/refunction/invoker/types"
@@ -20,36 +21,55 @@ const defaultKafkaAddress = "172.17.0.1:9093"
 const defaultActivationDBName = "whisk_local_activations"
 const defaultFunctionDBName = "whisk_local_whisks"
 
+const defaultRuntime = "python"
+const defaultTarget = "serverless-function.py"
 const defaultWorkerPoolSize = 4
+
+type Config struct {
+	PoolSize    int
+	Runtime     string
+	Target      string
+	CouchConfig CouchConfig `toml:"couch"`
+	KafkaConfig KafkaConfig `toml:"kafka"`
+}
+
+type KafkaConfig struct {
+	Address string
+}
+
+type CouchConfig struct {
+	Address            string
+	ActivationDatabase string `toml:"activation_db"`
+	FunctionDatabase   string `toml:"function_db"`
+}
 
 func startInvoker() int {
 	var (
-		couchAddress string
-		activationDB string
-		functionDB   string
-		kafkaAddress string
-
-		workerPoolSize int
+		configFile    string
+		invokerNumber int
 	)
 
-	invokerIDPtr := flag.Int("id", -1, "unique id for the invoker")
-
-	flag.StringVar(&couchAddress, "couch", defaultCouchDBAddress, "couch db address")
-	flag.StringVar(&activationDB, "activationdb", defaultCouchDBAddress, "couch activation db name")
-	flag.StringVar(&functionDB, "functiondb", defaultCouchDBAddress, "couch function db name")
-	flag.StringVar(&kafkaAddress, "kafka", defaultKafkaAddress, "kafka address")
-	flag.IntVar(&workerPoolSize, "poolsize", defaultWorkerPoolSize, "worker pool size")
+	flag.IntVar(&invokerNumber, "id", -1, "unique id for the invoker")
+	flag.StringVar(&configFile, "config", "config.toml", "config toml")
 	flag.Parse()
 
-	if *invokerIDPtr < 0 {
+	var config Config
+	_, err := toml.DecodeFile(configFile, &config)
+	if err != nil {
+		printError(fmt.Errorf("could not load config toml: %s", err))
+		return 1
+	}
+
+	config.FillDefaults()
+
+	if invokerNumber < 0 {
 		printError(fmt.Errorf("Invoker must have a unique id assigned greater than 0"))
 		return 1
 	}
-	invokerID := fmt.Sprintf("invoker%d", *invokerIDPtr)
+	invokerID := fmt.Sprintf("invoker%d", invokerNumber)
 	log.Info(fmt.Sprintf("Invoker with id: %s starting", invokerID))
 
-	invokerNumber := *invokerIDPtr
-	messenger, err := messages.NewMessenger(invokerNumber, kafkaAddress)
+	messenger, err := messages.NewMessenger(invokerNumber, config.KafkaConfig.Address)
 	if err != nil {
 		printError(err)
 		return 1
@@ -58,7 +78,7 @@ func startInvoker() int {
 
 	log.Debug("Messenger initialized")
 
-	functionStorage, err := storage.NewFunctionStorage(couchAddress, functionDB, activationDB)
+	functionStorage, err := storage.NewFunctionStorage(config.CouchConfig.Address, config.CouchConfig.FunctionDatabase, config.CouchConfig.ActivationDatabase)
 	if err != nil {
 		printError(fmt.Errorf("could not establish couch connection: %s", err))
 		return 1
@@ -72,7 +92,7 @@ func startInvoker() int {
 	}()
 
 	// Start fixed group of workers.
-	workers, err := workerpool.NewWorkerPool(workerPoolSize)
+	workers, err := workerpool.NewWorkerPool(config.Runtime, config.Target, config.PoolSize)
 	if err != nil {
 		printError(err)
 		return 1
@@ -192,4 +212,28 @@ func main() {
 
 func printError(err error) {
 	fmt.Fprintln(os.Stderr, err.Error())
+}
+
+func (c *Config) FillDefaults() {
+	if c.PoolSize == 0 {
+		c.PoolSize = defaultWorkerPoolSize
+	}
+	if c.Runtime == "" {
+		c.Runtime = defaultRuntime
+	}
+	if c.Target == "" {
+		c.Target = defaultTarget
+	}
+	if c.KafkaConfig.Address == "" {
+		c.KafkaConfig.Address = defaultKafkaAddress
+	}
+	if c.CouchConfig.Address == "" {
+		c.CouchConfig.Address = defaultCouchDBAddress
+	}
+	if c.CouchConfig.ActivationDatabase == "" {
+		c.CouchConfig.ActivationDatabase = defaultActivationDBName
+	}
+	if c.CouchConfig.FunctionDatabase == "" {
+		c.CouchConfig.FunctionDatabase = defaultFunctionDBName
+	}
 }
