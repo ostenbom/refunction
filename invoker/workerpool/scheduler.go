@@ -11,7 +11,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const defaultDecommissionTime = time.Second
+const defaultDecommissionTime = time.Second * 20
 
 type Scheduler struct {
 	workers          map[string]*ScheduleWorker
