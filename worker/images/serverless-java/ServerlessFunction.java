@@ -50,7 +50,7 @@ class ServerlessFunction {
                     continue;
                 }
                 String function = obj.get("data").getAsString();
-                StringClassLoader loader = new StringClassLoader(function);
+                StringJarLoader loader = new StringJarLoader(function);
                 return loader.findClass("Function");
             } catch(Exception e) {
                 System.out.println("failed to load function");
