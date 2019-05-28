@@ -7,7 +7,7 @@ default:
 	docker container rm dummy
 
 local:
-	javac -cp .:json-20180813.jar ServerlessFunction.java StringClassLoader.java
+	javac -cp .:gson.jar ServerlessFunction.java StringClassLoader.java
 
 clean:
 	rm -rf *.class

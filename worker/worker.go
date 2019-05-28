@@ -208,7 +208,7 @@ func (m *Worker) Start() error {
 	if m.runtime == "alpine" || m.runtime == "alpinepython" {
 		processArgs = []string{m.targetSnapshot}
 	} else if m.runtime == "java" {
-		processArgs = []string{"/opt/openjdk-13/bin/java", "-cp", ".:json-20180813.jar", "ServerlessFunction"}
+		processArgs = []string{"/opt/openjdk-13/bin/java", "-cp", ".:gson.jar", "ServerlessFunction"}
 	} else {
 		processArgs = []string{m.runtime, m.targetSnapshot}
 	}

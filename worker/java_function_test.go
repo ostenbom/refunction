@@ -19,9 +19,9 @@ var _ = Describe("Java Serverless Function Management", func() {
 	var stdout *gbytes.Buffer
 	var straceBuffer *gbytes.Buffer
 
-	var echoFunction = "yv66vgAAADQAIQoABgAPCQAQABEKABIAEwoAFAAVBwAWBwAXAQAGPGluaXQ+AQADKClWAQAEQ29kZQEAD0xpbmVOdW1iZXJUYWJsZQEABmhhbmRsZQEALChMb3JnL2pzb24vSlNPTk9iamVjdDspTG9yZy9qc29uL0pTT05PYmplY3Q7AQAKU291cmNlRmlsZQEADUZ1bmN0aW9uLmphdmEMAAcACAcAGAwAGQAaBwAbDAAcAB0HAB4MAB8AIAEACEZ1bmN0aW9uAQAQamF2YS9sYW5nL09iamVjdAEAEGphdmEvbGFuZy9TeXN0ZW0BAANvdXQBABVMamF2YS9pby9QcmludFN0cmVhbTsBABNvcmcvanNvbi9KU09OT2JqZWN0AQAIdG9TdHJpbmcBABQoKUxqYXZhL2xhbmcvU3RyaW5nOwEAE2phdmEvaW8vUHJpbnRTdHJlYW0BAAdwcmludGxuAQAVKExqYXZhL2xhbmcvU3RyaW5nOylWACEABQAGAAAAAAACAAEABwAIAAEACQAAAB0AAQABAAAABSq3AAGxAAAAAQAKAAAABgABAAAAAwABAAsADAABAAkAAAAoAAIAAgAAAAyyAAIrtgADtgAEK7AAAAABAAoAAAAKAAIAAAAFAAoABgABAA0AAAACAA4="
+	var echoFunction = "yv66vgAAADQAIQoABgAPCQAQABEKABIAEwoAFAAVBwAWBwAXAQAGPGluaXQ+AQADKClWAQAEQ29kZQEAD0xpbmVOdW1iZXJUYWJsZQEABG1haW4BADooTGNvbS9nb29nbGUvZ3Nvbi9Kc29uT2JqZWN0OylMY29tL2dvb2dsZS9nc29uL0pzb25PYmplY3Q7AQAKU291cmNlRmlsZQEADUZ1bmN0aW9uLmphdmEMAAcACAcAGAwAGQAaBwAbDAAcAB0HAB4MAB8AIAEACEZ1bmN0aW9uAQAQamF2YS9sYW5nL09iamVjdAEAEGphdmEvbGFuZy9TeXN0ZW0BAANvdXQBABVMamF2YS9pby9QcmludFN0cmVhbTsBABpjb20vZ29vZ2xlL2dzb24vSnNvbk9iamVjdAEACHRvU3RyaW5nAQAUKClMamF2YS9sYW5nL1N0cmluZzsBABNqYXZhL2lvL1ByaW50U3RyZWFtAQAHcHJpbnRsbgEAFShMamF2YS9sYW5nL1N0cmluZzspVgAhAAUABgAAAAAAAgABAAcACAABAAkAAAAdAAEAAQAAAAUqtwABsQAAAAEACgAAAAYAAQAAAAMACQALAAwAAQAJAAAAKAACAAEAAAAMsgACKrYAA7YABCqwAAAAAQAKAAAACgACAAAABQAKAAYAAQANAAAAAgAO"
 
-	var yoloSwagFunction = "yv66vgAAADQAKgoACwAUCQAVABYKAAUAFwoAGAAZBwAaCgAFABQIABsIABwKAAUAHQcAHgcAHwEABjxpbml0PgEAAygpVgEABENvZGUBAA9MaW5lTnVtYmVyVGFibGUBAAZoYW5kbGUBACwoTG9yZy9qc29uL0pTT05PYmplY3Q7KUxvcmcvanNvbi9KU09OT2JqZWN0OwEAClNvdXJjZUZpbGUBAA1GdW5jdGlvbi5qYXZhDAAMAA0HACAMACEAIgwAIwAkBwAlDAAmACcBABNvcmcvanNvbi9KU09OT2JqZWN0AQAEeW9sbwEABHN3YWcMACgAKQEACEZ1bmN0aW9uAQAQamF2YS9sYW5nL09iamVjdAEAEGphdmEvbGFuZy9TeXN0ZW0BAANvdXQBABVMamF2YS9pby9QcmludFN0cmVhbTsBAAh0b1N0cmluZwEAFCgpTGphdmEvbGFuZy9TdHJpbmc7AQATamF2YS9pby9QcmludFN0cmVhbQEAB3ByaW50bG4BABUoTGphdmEvbGFuZy9TdHJpbmc7KVYBAANwdXQBADsoTGphdmEvbGFuZy9TdHJpbmc7TGphdmEvbGFuZy9PYmplY3Q7KUxvcmcvanNvbi9KU09OT2JqZWN0OwAhAAoACwAAAAAAAgABAAwADQABAA4AAAAdAAEAAQAAAAUqtwABsQAAAAEADwAAAAYAAQAAAAMAAQAQABEAAQAOAAAANQADAAIAAAAZsgACK7YAA7YABLsABVm3AAYSBxIItgAJsAAAAAEADwAAAAoAAgAAAAUACgAGAAEAEgAAAAIAEw=="
+	var yoloSwagFunction = "yv66vgAAADQAKgoACwAUCQAVABYKAAUAFwoAGAAZBwAaCgAFABQIABsIABwKAAUAHQcAHgcAHwEABjxpbml0PgEAAygpVgEABENvZGUBAA9MaW5lTnVtYmVyVGFibGUBAARtYWluAQA6KExjb20vZ29vZ2xlL2dzb24vSnNvbk9iamVjdDspTGNvbS9nb29nbGUvZ3Nvbi9Kc29uT2JqZWN0OwEAClNvdXJjZUZpbGUBAA1GdW5jdGlvbi5qYXZhDAAMAA0HACAMACEAIgwAIwAkBwAlDAAmACcBABpjb20vZ29vZ2xlL2dzb24vSnNvbk9iamVjdAEABHlvbG8BAARzd2FnDAAoACkBAAhGdW5jdGlvbgEAEGphdmEvbGFuZy9PYmplY3QBABBqYXZhL2xhbmcvU3lzdGVtAQADb3V0AQAVTGphdmEvaW8vUHJpbnRTdHJlYW07AQAIdG9TdHJpbmcBABQoKUxqYXZhL2xhbmcvU3RyaW5nOwEAE2phdmEvaW8vUHJpbnRTdHJlYW0BAAdwcmludGxuAQAVKExqYXZhL2xhbmcvU3RyaW5nOylWAQALYWRkUHJvcGVydHkBACcoTGphdmEvbGFuZy9TdHJpbmc7TGphdmEvbGFuZy9TdHJpbmc7KVYAIQAKAAsAAAAAAAIAAQAMAA0AAQAOAAAAHQABAAEAAAAFKrcAAbEAAAABAA8AAAAGAAEAAAADAAkAEAARAAEADgAAAEAAAwACAAAAHLIAAiq2AAO2AAS7AAVZtwAGTCsSBxIItgAJK7AAAAABAA8AAAASAAQAAAAFAAoABgASAAcAGgAIAAEAEgAAAAIAEw=="
 
 	BeforeEach(func() {
 		id = strconv.Itoa(GinkgoParallelNode())
@@ -59,7 +59,7 @@ var _ = Describe("Java Serverless Function Management", func() {
 			Eventually(stdout).Should(gbytes.Say("started"))
 
 			Expect(worker.SendFunction(echoFunction)).To(Succeed())
-			Eventually(stdout).Should(gbytes.Say("{\"data\":true,\"type\":\"function_loaded\"}"))
+			Eventually(stdout).Should(gbytes.Say("{\"type\":\"function_loaded\",\"data\":true}"))
 		})
 
 		It("can get an object request response", func() {
@@ -79,7 +79,7 @@ var _ = Describe("Java Serverless Function Management", func() {
 			Expect(worker.Activate()).To(Succeed())
 
 			Expect(worker.SendFunction(echoFunction)).To(Succeed())
-			Eventually(stdout).Should(gbytes.Say("{\"data\":true,\"type\":\"function_loaded\"}"))
+			Eventually(stdout).Should(gbytes.Say("{\"type\":\"function_loaded\",\"data\":true}"))
 
 			request := map[string]interface{}{
 				"greatkey": "nicevalue",
@@ -178,11 +178,11 @@ var _ = Describe("Java Serverless Function Management", func() {
 			function := "function main(params) {\n    return params || {};\n}\n"
 			err := worker.SendFunction(function)
 			Expect(err).NotTo(BeNil())
-			Eventually(stdout).Should(gbytes.Say("{\"type\": \"function_loaded\", \"data\": false}"))
+			Eventually(stdout).Should(gbytes.Say("{\"data\":false,\"type\":\"function_loaded\"}"))
 
 			function = "def main(req):\n  print(req)\n  return req"
 			Expect(worker.SendFunction(function)).To(Succeed())
-			Eventually(stdout).Should(gbytes.Say("{\"type\": \"function_loaded\", \"data\": true}"))
+			Eventually(stdout).Should(gbytes.Say("{\"data\":true,\"type\":\"function_loaded\"}"))
 
 			request := "jsonstring"
 			response, err := worker.SendRequest(request)
