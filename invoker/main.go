@@ -21,16 +21,16 @@ const defaultKafkaAddress = "172.17.0.1:9093"
 const defaultActivationDBName = "whisk_local_activations"
 const defaultFunctionDBName = "whisk_local_whisks"
 
-const defaultRuntime = "python"
-const defaultTarget = "serverless-function.py"
-const defaultWorkerPoolSize = 4
+var defaultPoolCofig = []workerpool.GroupConfig{workerpool.GroupConfig{
+	Size:        4,
+	Runtime:     "python",
+	TargetLayer: "serverless-function.py",
+}}
 
 type Config struct {
-	PoolSize    int
-	Runtime     string
-	Target      string
-	CouchConfig CouchConfig `toml:"couch"`
-	KafkaConfig KafkaConfig `toml:"kafka"`
+	PoolConfig  []workerpool.GroupConfig `toml:"poolgroup"`
+	CouchConfig CouchConfig              `toml:"couch"`
+	KafkaConfig KafkaConfig              `toml:"kafka"`
 }
 
 type KafkaConfig struct {
@@ -92,7 +92,7 @@ func startInvoker() int {
 	}()
 
 	// Start fixed group of workers.
-	workers, err := workerpool.NewWorkerPool(config.Runtime, config.Target, config.PoolSize)
+	workers, err := workerpool.NewWorkerPool(config.PoolConfig)
 	if err != nil {
 		printError(err)
 		return 1
@@ -215,14 +215,8 @@ func printError(err error) {
 }
 
 func (c *Config) FillDefaults() {
-	if c.PoolSize == 0 {
-		c.PoolSize = defaultWorkerPoolSize
-	}
-	if c.Runtime == "" {
-		c.Runtime = defaultRuntime
-	}
-	if c.Target == "" {
-		c.Target = defaultTarget
+	if len(c.PoolConfig) == 0 {
+		c.PoolConfig = defaultPoolCofig
 	}
 	if c.KafkaConfig.Address == "" {
 		c.KafkaConfig.Address = defaultKafkaAddress

@@ -18,32 +18,45 @@ import (
 	"github.com/burntsushi/toml"
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/namespaces"
+	"github.com/ostenbom/refunction/invoker/types"
 	"github.com/ostenbom/refunction/worker"
 	"github.com/ostenbom/refunction/worker/containerdrunner"
 )
 
 type WorkerPool struct {
-	workers   []*worker.Worker
-	server    *exec.Cmd
-	client    *containerd.Client
-	config    containerdrunner.Config
-	runDir    string
-	scheduler *Scheduler
+	server     *exec.Cmd
+	client     *containerd.Client
+	config     containerdrunner.Config
+	runDir     string
+	schedulers map[string]*Scheduler
 }
 
-func NewWorkerPool(runtime string, target string, size int) (*WorkerPool, error) {
+type GroupConfig struct {
+	Size        int
+	Runtime     string
+	TargetLayer string `toml:"target_layer"`
+}
+
+func NewWorkerPool(groups []GroupConfig) (*WorkerPool, error) {
 	runDir, err := ioutil.TempDir("", "refunction")
 	if err != nil {
 		return nil, fmt.Errorf("could not create temp dir for worker pool: %s", err)
 	}
 
+	var runtimes []string
+	var layers []string
+	for _, group := range groups {
+		runtimes = append(runtimes, group.Runtime)
+		layers = append(layers, group.TargetLayer)
+	}
+
 	cacheDir := "/var/cache/refunction"
-	err = ensureRuntimes([]string{runtime}, cacheDir)
+	err = ensureRuntimes(runtimes, cacheDir)
 	if err != nil {
 		return nil, err
 	}
 
-	err = ensureLayers([]string{target}, cacheDir)
+	err = ensureLayers(layers, cacheDir)
 	if err != nil {
 		return nil, err
 	}
@@ -59,46 +72,48 @@ func NewWorkerPool(runtime string, target string, size int) (*WorkerPool, error)
 		return nil, fmt.Errorf("could not connect to containerd client: %s", err)
 	}
 
-	ctx := namespaces.WithNamespace(context.Background(), "refunction-workerpool")
-	snapManager, err := worker.NewSnapshotManager(ctx, client, runtime)
-	if err != nil {
-		return nil, err
-	}
-
-	err = snapManager.CreateLayerFromBase(target)
-	if err != nil {
-		return nil, err
-	}
-
-	workers := make([]*worker.Worker, size)
-	for i := 0; i < size; i++ {
-		w, err := worker.NewWorkerWithSnapManager(strconv.Itoa(i), client, runtime, target, snapManager, ctx)
+	schedulers := make(map[string]*Scheduler)
+	for _, group := range groups {
+		ctx := namespaces.WithNamespace(context.Background(), "refunction-workerpool-"+group.Runtime)
+		snapManager, err := worker.NewSnapshotManager(ctx, client, group.Runtime)
 		if err != nil {
-			return nil, fmt.Errorf("could not start worker in pool: %s", err)
+			return nil, err
 		}
-		workers[i] = w
-	}
 
-	for _, w := range workers {
-		err := w.Start()
+		err = snapManager.CreateLayerFromBase(group.TargetLayer)
 		if err != nil {
-			return nil, fmt.Errorf("could not start worker: %s", err)
+			return nil, err
 		}
-		err = w.Activate()
-		if err != nil {
-			return nil, fmt.Errorf("could not activate worker: %s", err)
-		}
-	}
 
-	scheduler := NewScheduler(workers)
+		workers := make([]*worker.Worker, group.Size)
+		for i := 0; i < group.Size; i++ {
+			w, err := worker.NewWorkerWithSnapManager(strconv.Itoa(i), client, group.Runtime, group.TargetLayer, snapManager, ctx)
+			if err != nil {
+				return nil, fmt.Errorf("could not start worker in pool: %s", err)
+			}
+			workers[i] = w
+		}
+
+		for _, w := range workers {
+			err := w.Start()
+			if err != nil {
+				return nil, fmt.Errorf("could not start worker: %s", err)
+			}
+			err = w.Activate()
+			if err != nil {
+				return nil, fmt.Errorf("could not activate worker: %s", err)
+			}
+		}
+
+		schedulers[group.Runtime] = NewScheduler(workers, group.Runtime)
+	}
 
 	return &WorkerPool{
-		workers:   workers,
-		server:    server,
-		client:    client,
-		config:    config,
-		runDir:    runDir,
-		scheduler: scheduler,
+		server:     server,
+		client:     client,
+		config:     config,
+		runDir:     runDir,
+		schedulers: schedulers,
 	}, nil
 }
 
@@ -132,10 +147,21 @@ func NewContainerdServer(runDir string, config containerdrunner.Config) (*exec.C
 	return cmd, nil
 }
 
+func (p *WorkerPool) Run(function *types.FunctionDoc, request interface{}) (interface{}, error) {
+	for runtime, s := range p.schedulers {
+		// Fuzzy for now. OpenWhisk calls python3 python:3 for example
+		if strings.Contains(function.Executable.Kind, runtime) {
+			return s.Run(function, request)
+		}
+	}
+
+	return nil, fmt.Errorf("no such kind of runtime: %s", function.Executable.Kind)
+}
+
 func (p *WorkerPool) Close() error {
 	var workerErr error
-	for _, w := range p.workers {
-		err := w.End()
+	for _, s := range p.schedulers {
+		err := s.End()
 		if err != nil {
 			workerErr = err
 		}

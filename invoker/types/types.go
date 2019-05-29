@@ -3,6 +3,7 @@ package types
 import (
 	"encoding/base64"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -143,6 +144,15 @@ func (f *FunctionDoc) CodeString() (string, error) {
 		if !ok {
 			return "", fmt.Errorf("attachment code was not string: %s", v)
 		}
+
+		// Java code is a b64 encoded jar
+		if f.Executable.Kind == "java" {
+			b64url := attachmentString[4:]
+			// For some reason when it comes through whisk it is b64url encoded
+			b64 := strings.ReplaceAll(strings.ReplaceAll(b64url, "-", "+"), "_", "/")
+			return b64, nil
+		}
+
 		b64code := attachmentString[4:] // mem:b64encodedcode
 		functionBytes, err := base64.StdEncoding.DecodeString(b64code)
 		if err != nil {

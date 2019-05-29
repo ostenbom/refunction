@@ -14,6 +14,7 @@ import (
 const defaultDecommissionTime = time.Second * 20
 
 type Scheduler struct {
+	runtime          string
 	workers          map[string]*ScheduleWorker
 	undeployed       []string
 	deployed         []string
@@ -28,7 +29,7 @@ type ScheduleWorker struct {
 	function string
 }
 
-func NewScheduler(workers []*worker.Worker) *Scheduler {
+func NewScheduler(workers []*worker.Worker, runtime string) *Scheduler {
 	scheduleWorkers := make(map[string]*ScheduleWorker)
 	var undeployed []string
 
@@ -40,6 +41,7 @@ func NewScheduler(workers []*worker.Worker) *Scheduler {
 	}
 
 	return &Scheduler{
+		runtime:          runtime,
 		workers:          scheduleWorkers,
 		undeployed:       undeployed,
 		decommissionTime: defaultDecommissionTime,
@@ -54,13 +56,14 @@ func NewFakeScheduler(workers map[string]*ScheduleWorker, undeployed []string, d
 	}
 }
 
-func (p *WorkerPool) Run(function *types.FunctionDoc, request interface{}) (interface{}, error) {
+func (s *Scheduler) Run(function *types.FunctionDoc, request interface{}) (interface{}, error) {
 	functionLogger := log.WithFields(log.Fields{
 		"request":      request,
 		"functionID":   function.ID,
 		"functionName": function.Name,
+		"runtime":      s.runtime,
 	})
-	name, schedulable, exists := p.scheduler.RunDeployedFunction(function.ID)
+	name, schedulable, exists := s.RunDeployedFunction(function.ID)
 	if exists {
 		schedulable.MarkRunTime()
 
@@ -69,18 +72,18 @@ func (p *WorkerPool) Run(function *types.FunctionDoc, request interface{}) (inte
 		result, err := schedulable.worker.SendRequest(request)
 		functionLogger.WithFields(log.Fields{"result": result}).Debug("response received")
 
-		p.scheduler.RunComplete(name)
+		s.RunComplete(name)
 		return result, err
 	}
 
-	p.scheduler.mux.Lock()
-	if len(p.scheduler.undeployed) > 0 {
-		name, schedulable := p.scheduler.RunUndeployed()
-		p.scheduler.mux.Unlock()
+	s.mux.Lock()
+	if len(s.undeployed) > 0 {
+		name, schedulable := s.RunUndeployed()
+		s.mux.Unlock()
 
-		functionLogger = functionLogger.WithFields(log.Fields{"worker": name})
-		functionLogger.Debug("loading function")
 		functionCode, err := function.CodeString()
+		functionLogger = functionLogger.WithFields(log.Fields{"worker": name, "code": functionCode})
+		functionLogger.Debug("loading function")
 		if err != nil {
 			return "", err
 		}
@@ -92,13 +95,13 @@ func (p *WorkerPool) Run(function *types.FunctionDoc, request interface{}) (inte
 		functionLogger.WithFields(log.Fields{"result": result}).Debug("response received")
 
 		schedulable.SetFunction(function.ID)
-		p.scheduler.RunComplete(name)
-		p.scheduler.ScheduleDecommission(name, schedulable)
+		s.RunComplete(name)
+		s.ScheduleDecommission(name, schedulable)
 		return result, err
 	} else {
-		p.scheduler.mux.Unlock()
-		p.scheduler.ForceDecomission()
-		return p.Run(function, request)
+		s.mux.Unlock()
+		s.ForceDecomission()
+		return s.Run(function, request)
 	}
 }
 
@@ -191,6 +194,13 @@ func (s *Scheduler) ScheduleDecommission(name string, schedulable *ScheduleWorke
 func (s *Scheduler) ForceDecomission() {
 	var toDecomission string
 	s.mux.Lock()
+	if len(s.deployed) <= 0 {
+		s.mux.Unlock()
+		log.Error("No available decomission slots")
+		time.Sleep(time.Millisecond * 100)
+		s.ForceDecomission()
+		return
+	}
 	toDecomission, s.deployed = s.deployed[0], s.deployed[1:]
 	s.mux.Unlock()
 
@@ -203,6 +213,17 @@ func (s *Scheduler) ForceDecomission() {
 	s.mux.Lock()
 	s.undeployed = append(s.undeployed, toDecomission)
 	s.mux.Unlock()
+}
+
+func (s *Scheduler) End() error {
+	var workerErr error
+	for _, sw := range s.workers {
+		err := sw.worker.End()
+		if err != nil {
+			workerErr = err
+		}
+	}
+	return workerErr
 }
 
 func (sw *ScheduleWorker) Decomission() error {

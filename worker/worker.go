@@ -144,6 +144,7 @@ func (m *Worker) connectStdPipes() {
 			var message Message
 			err = json.Unmarshal([]byte(line), &message)
 			if err != nil {
+				log.Debug(line)
 				continue
 			}
 
@@ -154,7 +155,7 @@ func (m *Worker) connectStdPipes() {
 
 			if message.Type == "info" || message.Type == "log" {
 				// Ignore these for now
-				// fmt.Println(data.Data)
+				// log.Debug(message.Data)
 			} else {
 				m.messages <- message
 			}

@@ -2,6 +2,21 @@
 # runtime = "python"
 # target_layer = "serverless-function.py"
 
+[[poolgroup]]
+size = 1
+runtime = "python"
+target_layer = "serverless-function.py"
+
+[[poolgroup]]
+size = 1
+runtime = "java"
+target_layer = "serverless-java"
+
+[[poolgroup]]
+size = 1
+runtime = "node"
+target_layer = "serverless-function.js"
+
 [kafka]
 # address = "somekafkaaddr"
 
