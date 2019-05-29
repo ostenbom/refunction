@@ -127,7 +127,7 @@ var _ = Describe("Java Serverless Function Management", func() {
 			Expect(response).To(Equal(expectedResponse))
 		})
 
-		FIt("is resiliant to improper function loads", func() {
+		It("is resiliant to improper function loads", func() {
 			Expect(worker.Activate()).To(Succeed())
 
 			// JS for example
