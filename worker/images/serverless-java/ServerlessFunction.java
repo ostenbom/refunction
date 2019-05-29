@@ -55,6 +55,10 @@ class ServerlessFunction {
             } catch(Exception e) {
                 System.out.println("failed to load function");
                 System.out.println(e);
+                JsonObject failure = new JsonObject();
+                failure.addProperty("type", "function_loaded");
+                failure.addProperty("data", false);
+                System.out.println(failure.toString());
                 continue;
             }
         }

@@ -127,6 +127,26 @@ var _ = Describe("Java Serverless Function Management", func() {
 			Expect(response).To(Equal(expectedResponse))
 		})
 
+		FIt("is resiliant to improper function loads", func() {
+			Expect(worker.Activate()).To(Succeed())
+
+			// JS for example
+			function := "function main(params) {\n    return params || {};\n}\n"
+			err := worker.SendFunction(function)
+			Expect(err).NotTo(BeNil())
+			Eventually(stdout).Should(gbytes.Say("{\"type\":\"function_loaded\",\"data\":false}"))
+
+			Expect(worker.SendFunction(echoFunction)).To(Succeed())
+			Eventually(stdout).Should(gbytes.Say("{\"type\":\"function_loaded\",\"data\":true}"))
+
+			request := map[string]interface{}{
+				"greatkey": "nicevalue",
+			}
+			response, err := worker.SendRequest(request)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(response).To(Equal(request))
+		})
+
 		XIt("can load a function with an import from the std library", func() {
 			Expect(worker.Activate()).To(Succeed())
 
@@ -171,23 +191,5 @@ var _ = Describe("Java Serverless Function Management", func() {
 			Expect(response).To(Equal("abcdefghijklmnopqrstuvwxyz"))
 		})
 
-		XIt("is resiliant to improper function loads", func() {
-			Expect(worker.Activate()).To(Succeed())
-
-			// JS for example
-			function := "function main(params) {\n    return params || {};\n}\n"
-			err := worker.SendFunction(function)
-			Expect(err).NotTo(BeNil())
-			Eventually(stdout).Should(gbytes.Say("{\"data\":false,\"type\":\"function_loaded\"}"))
-
-			function = "def main(req):\n  print(req)\n  return req"
-			Expect(worker.SendFunction(function)).To(Succeed())
-			Eventually(stdout).Should(gbytes.Say("{\"data\":true,\"type\":\"function_loaded\"}"))
-
-			request := "jsonstring"
-			response, err := worker.SendRequest(request)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(response).To(Equal(request))
-		})
 	})
 })
