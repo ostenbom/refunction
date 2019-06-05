@@ -11,10 +11,12 @@ def start_function_server():
     while not loaded:
         try:
             function_string = receive_data_of_type("function", stdin)
+            log(f"received function: {function_string}")
             global main
             exec(function_string, globals())
             loaded = True
-        except:
+        except Exception as e:
+            log(f"function load error: {e}")
             send_data("function_loaded", False)
             continue
 

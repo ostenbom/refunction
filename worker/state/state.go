@@ -121,6 +121,27 @@ func (s *State) RestoreProgramBreak() error {
 	return nil
 }
 
+func (s *State) FixupSyscallState() error {
+	errors := make(chan error)
+	regState := s.chooseAnyRegState()
+	regState.task.InStopFunction <- func(t *ptrace.TraceTask) {
+		err := syscall.PtraceSyscall(t.Tid, 0)
+		if err != nil {
+			errors <- err
+		}
+
+		var waitStat syscall.WaitStatus
+		_, err = syscall.Wait4(t.Tid, &waitStat, syscall.WALL, nil)
+		if err != nil {
+			errors <- err
+		}
+
+		errors <- nil
+	}
+
+	return <-errors
+}
+
 func (s *State) UnmapNewLocations() error {
 	currentMemory, err := newMemoryLocations(s.pid)
 	if err != nil {
@@ -161,36 +182,18 @@ func calculateNewLocations(oldState []*Memory, newState []*Memory) []*Memory {
 func (s *State) runSyscall(syscallNum uint64, arg1 uint64, arg2 uint64) (uint64, error) {
 	// We could work on any thread
 	regState := s.chooseAnyRegState()
-	regsChan := make(chan syscall.PtraceRegs)
-	errorsChan := make(chan error)
-	regState.task.InStopFunction <- func(t *ptrace.TraceTask) {
-		var regs syscall.PtraceRegs
-		err := syscall.PtraceGetRegs(t.Tid, &regs)
-		if err != nil {
-			errorsChan <- err
-		}
-		regsChan <- regs
-	}
 
-	var currentRegs syscall.PtraceRegs
-	select {
-	case err := <-errorsChan:
-		return 0, fmt.Errorf("could not get regs: %s", err)
-	case regs := <-regsChan:
-		currentRegs = regs
-	}
-
+	var syscallRegs syscall.PtraceRegs
 	// Set registers to correct arguments
-	// 12 is brk
-	currentRegs.Rax = syscallNum
-	currentRegs.Rdi = arg1
-	currentRegs.Rsi = arg2
-	// currentRegs.Rdx = arg3
-	// currentRegs.Rcx = arg4
-	// currentRegs.R8 = arg5
-	// currentRegs.R9 = arg6
+	syscallRegs.Rax = syscallNum
+	syscallRegs.Rdi = arg1
+	syscallRegs.Rsi = arg2
+	// syscallRegs.Rdx = arg3
+	// syscallRegs.Rcx = arg4
+	// syscallRegs.R8 = arg5
+	// syscallRegs.R9 = arg6
 
-	regState.task.RunSyscall <- currentRegs
+	regState.task.RunSyscall <- syscallRegs
 	select {
 	case returnRegs := <-regState.task.SyscallReturn:
 		return returnRegs.Rax, nil

@@ -204,57 +204,56 @@ func (t *TraceTask) popWait() {
 	}
 }
 
-func (t *TraceTask) runSyscall(regs syscall.PtraceRegs) (syscall.PtraceRegs, error) {
+func (t *TraceTask) runSyscall(argRegs syscall.PtraceRegs) (syscall.PtraceRegs, error) {
+	// Get current registers
+	var startRegs syscall.PtraceRegs
+	err := syscall.PtraceGetRegs(t.Tid, &startRegs)
+	if err != nil {
+		return syscall.PtraceRegs{}, fmt.Errorf("could not get task regs: %s", err)
+	}
+
 	// Get current Rip data
 	preSyscallInstruction := make([]byte, 2)
-	count, err := syscall.PtracePeekData(t.Tid, uintptr(regs.PC()), preSyscallInstruction)
+	count, err := syscall.PtracePeekData(t.Tid, uintptr(startRegs.PC()), preSyscallInstruction)
 	if err != nil || count != 2 {
-		return syscall.PtraceRegs{}, fmt.Errorf("could not peek data %s", err)
+		return syscall.PtraceRegs{}, fmt.Errorf("could not peek data: %s", err)
 	}
 
 	// Change instruction at Rip to be 0f 05 (syscall)
 	syscallInstruction := []byte{byte(0x0f), byte(0x05)}
-	count, err = syscall.PtracePokeData(t.Tid, uintptr(regs.PC()), syscallInstruction)
+	count, err = syscall.PtracePokeData(t.Tid, uintptr(startRegs.PC()), syscallInstruction)
 	if err != nil || count != 2 {
 		return syscall.PtraceRegs{}, fmt.Errorf("could not poke instruction data: %s", err)
 	}
 
+	syscallRegs := startRegs
+
+	syscallRegs.Rax = argRegs.Rax
+	syscallRegs.Rdi = argRegs.Rdi
+	syscallRegs.Rsi = argRegs.Rsi
+	// syscallRegs.Rdx = argRegs.Rdx
+	// syscallRegs.Rcx = argRegs.Rcx
+	// syscallRegs.R8 = argRegs.R8
+	// syscallRegs.R9 = argRegs.R9
+
 	// Change regs for syscall
-	err = syscall.PtraceSetRegs(t.Tid, &regs)
+	err = syscall.PtraceSetRegs(t.Tid, &syscallRegs)
 	if err != nil {
 		return syscall.PtraceRegs{}, fmt.Errorf("could not poke instruction data: %s", err)
 	}
 
 	// Continue to stop at next syscall
-	err = syscall.PtraceSyscall(t.Tid, 0)
+	err = syscall.PtraceSingleStep(t.Tid)
 	if err != nil {
 		return syscall.PtraceRegs{}, fmt.Errorf("could not continue task: %s", err)
 	}
 
 	// Let enter syscall
 	var waitStat syscall.WaitStatus
-	_, err = syscall.Wait4(t.Tid, &waitStat, syscall.WALL, nil)
-	if err != nil {
-		return syscall.PtraceRegs{}, fmt.Errorf("could not wait on syscall task: %s", err)
-	}
-
-	if waitStat.StopSignal() != syscall.SIGTRAP|0x80 {
-		return syscall.PtraceRegs{}, fmt.Errorf("task did not stop on syscall")
-	}
-
-	err = syscall.PtraceSyscall(t.Tid, 0)
-	if err != nil {
-		return syscall.PtraceRegs{}, fmt.Errorf("could not continue task: %s", err)
-	}
-
 	// Catch exit. Change Rip back. Set instruction at Rip back to what it was.
 	_, err = syscall.Wait4(t.Tid, &waitStat, syscall.WALL, nil)
 	if err != nil {
 		return syscall.PtraceRegs{}, fmt.Errorf("could wait on syscall task: %s", err)
-	}
-
-	if waitStat.StopSignal() != syscall.SIGTRAP|0x80 {
-		return syscall.PtraceRegs{}, fmt.Errorf("task did not stop on syscall")
 	}
 
 	var exitRegs syscall.PtraceRegs
@@ -263,11 +262,12 @@ func (t *TraceTask) runSyscall(regs syscall.PtraceRegs) (syscall.PtraceRegs, err
 		return syscall.PtraceRegs{}, fmt.Errorf("could not get task regs: %s", err)
 	}
 
-	count, err = syscall.PtracePokeData(t.Tid, uintptr(regs.PC()), preSyscallInstruction)
+	count, err = syscall.PtracePokeData(t.Tid, uintptr(startRegs.PC()), preSyscallInstruction)
 	if err != nil || count != 2 {
 		return syscall.PtraceRegs{}, fmt.Errorf("could not poke instruction data: %s", err)
 	}
-	err = syscall.PtraceSetRegs(t.Tid, &regs)
+
+	err = syscall.PtraceSetRegs(t.Tid, &startRegs)
 	if err != nil {
 		return syscall.PtraceRegs{}, fmt.Errorf("could not reset task regs: %s", err)
 	}

@@ -437,11 +437,13 @@ func (m *Worker) Restore() error {
 
 	start := time.Now()
 
+	fixup := false
 	changed, err := state.ProgramBreakChanged()
 	if err != nil {
 		return fmt.Errorf("could not check program break on restore: %s", err)
 	}
 	if changed {
+		fixup = true
 		err := state.RestoreProgramBreak()
 		if err != nil {
 			return fmt.Errorf("count not restore program break: %s", err)
@@ -453,9 +455,17 @@ func (m *Worker) Restore() error {
 		return fmt.Errorf("could not check num mem locations changed on restore: %s", err)
 	}
 	if changed {
+		fixup = true
 		err := state.UnmapNewLocations()
 		if err != nil {
 			return fmt.Errorf("count not unmap new locations: %s", err)
+		}
+	}
+
+	if fixup {
+		err := state.FixupSyscallState()
+		if err != nil {
+			return fmt.Errorf("count not fixup syscall state: %s", err)
 		}
 	}
 
