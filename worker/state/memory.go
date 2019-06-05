@@ -194,6 +194,17 @@ func (s *State) MemoryChanged() (bool, error) {
 	return false, nil
 }
 
+func (s *State) NumMemoryLocationsChanged() (bool, error) {
+	newMemory, err := newMemoryLocations(s.pid)
+	if err != nil {
+		return true, fmt.Errorf("could not get new memory on memory locations changed check: %s", err)
+	}
+	if len(s.memoryLocations) != len(newMemory) {
+		return true, nil
+	}
+	return false, nil
+}
+
 func (s *State) RestoreDirtyPages() error {
 
 	memoryFile, err := os.OpenFile(fmt.Sprintf("/proc/%d/mem", s.pid), os.O_RDWR, 0)

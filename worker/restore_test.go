@@ -347,6 +347,51 @@ def main(params):
 				Expect(err).NotTo(HaveOccurred())
 				Expect(changed).To(BeFalse())
 			})
+
+			It("can remove new memory areas", func() {
+				Expect(worker.Activate()).To(Succeed())
+				initialState, err := worker.GetInitialCheckpoint()
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(worker.SendFunction(largeMemoryFunc)).To(Succeed())
+				response, err := worker.SendRequest("")
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(len(response.(string))).To(Equal(100000))
+
+				changed, err := initialState.NumMemoryLocationsChanged()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(changed).To(BeTrue())
+
+				Expect(worker.Restore()).To(Succeed())
+
+				changed, err = initialState.NumMemoryLocationsChanged()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(changed).To(BeFalse())
+			})
+
+			// TODO: We are not testing for mremaps here
+			It("leaves all memory the same as it was after restore", func() {
+				Expect(worker.Activate()).To(Succeed())
+				initialState, err := worker.GetInitialCheckpoint()
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(worker.SendFunction(largeMemoryFunc)).To(Succeed())
+				response, err := worker.SendRequest("")
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(len(response.(string))).To(Equal(100000))
+
+				changed, err := initialState.MemoryChanged()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(changed).To(BeTrue())
+
+				Expect(worker.Restore()).To(Succeed())
+
+				changed, err = initialState.MemoryChanged()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(changed).To(BeFalse())
+			})
 		})
 	})
 })

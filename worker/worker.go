@@ -448,6 +448,17 @@ func (m *Worker) Restore() error {
 		}
 	}
 
+	changed, err = state.NumMemoryLocationsChanged()
+	if err != nil {
+		return fmt.Errorf("could not check num mem locations changed on restore: %s", err)
+	}
+	if changed {
+		err := state.UnmapNewLocations()
+		if err != nil {
+			return fmt.Errorf("count not unmap new locations: %s", err)
+		}
+	}
+
 	err = state.RestoreDirtyPages()
 	if err != nil {
 		return fmt.Errorf("could not restore stack: %s", err)

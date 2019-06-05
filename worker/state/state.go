@@ -105,6 +105,60 @@ func (s *State) RestoreRegs() error {
 }
 
 func (s *State) RestoreProgramBreak() error {
+	beforeHeap, err := s.getMemory("[heap]")
+	if err != nil {
+		return err
+	}
+	afterOffset, err := s.runSyscall(12, uint64(beforeHeap.endOffset), 0)
+	if err != nil {
+		return err
+	}
+
+	if uint64(beforeHeap.endOffset) != afterOffset {
+		return fmt.Errorf("could not return program break to previous value")
+	}
+
+	return nil
+}
+
+func (s *State) UnmapNewLocations() error {
+	currentMemory, err := newMemoryLocations(s.pid)
+	if err != nil {
+		return fmt.Errorf("could not get new memory on memory changed check: %s", err)
+	}
+
+	newLocations := calculateNewLocations(s.memoryLocations, currentMemory)
+	for _, loc := range newLocations {
+		returnVal, err := s.runSyscall(11, uint64(loc.startOffset), uint64(loc.endOffset-loc.startOffset))
+		if err != nil {
+			return fmt.Errorf("could not unmap new location: %s", err)
+		}
+		if returnVal != 0 {
+			return fmt.Errorf("could not unmap new location")
+		}
+	}
+
+	return nil
+}
+
+func calculateNewLocations(oldState []*Memory, newState []*Memory) []*Memory {
+	var newLocations []*Memory
+	for _, newLoc := range newState {
+		existed := false
+		for _, oldLoc := range oldState {
+			if newLoc.name == oldLoc.name && newLoc.startOffset == oldLoc.startOffset {
+				existed = true
+			}
+		}
+		if !existed {
+			newLocations = append(newLocations, newLoc)
+		}
+	}
+
+	return newLocations
+}
+
+func (s *State) runSyscall(syscallNum uint64, arg1 uint64, arg2 uint64) (uint64, error) {
 	// We could work on any thread
 	regState := s.chooseAnyRegState()
 	regsChan := make(chan syscall.PtraceRegs)
@@ -121,31 +175,28 @@ func (s *State) RestoreProgramBreak() error {
 	var currentRegs syscall.PtraceRegs
 	select {
 	case err := <-errorsChan:
-		return fmt.Errorf("could not get regs: %s", err)
+		return 0, fmt.Errorf("could not get regs: %s", err)
 	case regs := <-regsChan:
 		currentRegs = regs
 	}
 
 	// Set registers to correct arguments
 	// 12 is brk
-	currentRegs.Rax = 12
-	beforeHeap, err := s.getMemory("[heap]")
-	if err != nil {
-		return err
-	}
-	currentRegs.Rdi = uint64(beforeHeap.endOffset)
+	currentRegs.Rax = syscallNum
+	currentRegs.Rdi = arg1
+	currentRegs.Rsi = arg2
+	// currentRegs.Rdx = arg3
+	// currentRegs.Rcx = arg4
+	// currentRegs.R8 = arg5
+	// currentRegs.R9 = arg6
 
 	regState.task.RunSyscall <- currentRegs
 	select {
 	case returnRegs := <-regState.task.SyscallReturn:
-		if returnRegs.Rax != uint64(beforeHeap.endOffset) {
-			return fmt.Errorf("could not restore the program break")
-		}
+		return returnRegs.Rax, nil
 	case err := <-regState.task.SyscallError:
-		return err
+		return 0, err
 	}
-
-	return nil
 }
 
 func (s *State) chooseAnyRegState() TaskRegState {
