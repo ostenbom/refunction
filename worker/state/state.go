@@ -136,9 +136,13 @@ func (s *State) RestoreProgramBreak() error {
 	currentRegs.Rdi = uint64(beforeHeap.endOffset)
 
 	regState.task.RunSyscall <- currentRegs
-	returnRegs := <-regState.task.SyscallReturn
-	if returnRegs.Rax != uint64(beforeHeap.endOffset) {
-		return fmt.Errorf("could not restore the program break")
+	select {
+	case returnRegs := <-regState.task.SyscallReturn:
+		if returnRegs.Rax != uint64(beforeHeap.endOffset) {
+			return fmt.Errorf("could not restore the program break")
+		}
+	case err := <-regState.task.SyscallError:
+		return err
 	}
 
 	return nil
