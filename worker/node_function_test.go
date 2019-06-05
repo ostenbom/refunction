@@ -54,7 +54,7 @@ var _ = Describe("Node Serverless Function Management", func() {
 			Expect(len(worker.GetCheckpoints())).To(Equal(1))
 			Eventually(stdout).Should(gbytes.Say("started"))
 
-			function := "function main(p) { return p }"
+			function := "function main(p) { return p } \nexports.handler = main;"
 			Expect(worker.SendFunction(function)).To(Succeed())
 			Eventually(stdout).Should(gbytes.Say("{\"type\":\"function_loaded\",\"data\":true}"))
 		})
@@ -62,7 +62,7 @@ var _ = Describe("Node Serverless Function Management", func() {
 		It("can get a request response", func() {
 			Expect(worker.Activate()).To(Succeed())
 
-			function := "function main(p) { return p }"
+			function := "function main(p) { return p } \nexports.handler = main;"
 			Expect(worker.SendFunction(function)).To(Succeed())
 
 			request := "jsonstring"
@@ -74,7 +74,7 @@ var _ = Describe("Node Serverless Function Management", func() {
 		It("can get an object request response", func() {
 			Expect(worker.Activate()).To(Succeed())
 
-			function := "function main(p) { return p }"
+			function := "function main(p) { return p } \nexports.handler = main;"
 			Expect(worker.SendFunction(function)).To(Succeed())
 
 			request := map[string]interface{}{
@@ -88,7 +88,7 @@ var _ = Describe("Node Serverless Function Management", func() {
 		It("can get several request responses", func() {
 			Expect(worker.Activate()).To(Succeed())
 
-			function := "function main(p) { return p }"
+			function := "function main(p) { return p } \nexports.handler = main;"
 			Expect(worker.SendFunction(function)).To(Succeed())
 			Eventually(stdout).Should(gbytes.Say("{\"type\":\"function_loaded\",\"data\":true}"))
 
@@ -111,7 +111,7 @@ var _ = Describe("Node Serverless Function Management", func() {
 		It("can restore and change function", func() {
 			Expect(worker.Activate()).To(Succeed())
 
-			function := "function main(p) { return p }"
+			function := "function main(p) { return p } \nexports.handler = main;"
 			Expect(worker.SendFunction(function)).To(Succeed())
 
 			request := "jsonstring"
@@ -139,7 +139,7 @@ var _ = Describe("Node Serverless Function Management", func() {
 			Expect(err).NotTo(BeNil())
 			Eventually(stdout).Should(gbytes.Say("{\"type\":\"function_loaded\",\"data\":false}"))
 
-			function = "function main(params) {\n    return params || {};\n}\n"
+			function = "function main(params) {\n    return params || {};\n}\n \nexports.handler = main;"
 			Expect(worker.SendFunction(function)).To(Succeed())
 			Eventually(stdout).Should(gbytes.Say("{\"type\":\"function_loaded\",\"data\":true}"))
 

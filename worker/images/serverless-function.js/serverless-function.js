@@ -22,32 +22,14 @@ rl.on('line', function(line){
     return
   }
 
-
   funcString = request['data']
 
-  nameDefMatches = funcString.match(/function .*\(/g)
-  if (nameDefMatches === null) {
-    console.log(JSON.stringify({'type': 'function_loaded', 'data': false}))
-    return
-  }
+  var Module = module.constructor
+  var m = new Module()
+  m._compile(funcString, '/tmp/none')
+  user_exports = m.exports;
 
-  defPos = funcString.indexOf(nameDefMatches)
-  postDef = funcString.substring(defPos + nameDefMatches[0].length, funcString.length)
-
-  argsString = postDef.substring(0, postDef.indexOf(')'))
-  argsNoSpaces = argsString.replace(/ /g, "")
-  args = argsNoSpaces.split(',')
-
-  postArgs = postDef.substring(postDef.indexOf(')') + 1, postDef.length)
-  body = postArgs.substring(postArgs.indexOf('{') + 1, postArgs.lastIndexOf('}'))
-
-  if (args === null || body === null) {
-    console.log(JSON.stringify({'type': 'function_loaded', 'data': false}))
-    return
-  }
-
-  var f = new Function(args, body)
-  if (f === null) {
+  if (user_exports === null) {
     console.log(JSON.stringify({'type': 'function_loaded', 'data': false}))
     return
   }
@@ -73,7 +55,7 @@ rl.on('line', function(line){
       return;
     }
 
-    result = f(request['data'])
+    result = user_exports.handler(request['data'])
     console.log(JSON.stringify({'type': 'response', 'data': result}))
   })
 })
