@@ -115,6 +115,35 @@ func (s *State) MemorySize() int {
 	return total
 }
 
+func (s *State) ProgramBreakChanged() (bool, error) {
+	newMemory, err := newMemoryLocations(s.pid)
+	if err != nil {
+		return true, fmt.Errorf("could not get new memory on program break changed check: %s", err)
+	}
+
+	beforeHeap, err := s.getMemory("[heap]")
+	if err != nil {
+		return true, err
+	}
+
+	var afterHeap *Memory
+	for i := range newMemory {
+		if newMemory[i].name == "[heap]" {
+			afterHeap = newMemory[i]
+		}
+	}
+	if afterHeap == nil {
+		// Should be impossible at this point
+		return true, fmt.Errorf("no heap in new memory on break change check")
+	}
+
+	if beforeHeap.endOffset != afterHeap.endOffset {
+		return true, nil
+	}
+
+	return false, nil
+}
+
 func (s *State) MemoryChanged() (bool, error) {
 	newMemory, err := newMemoryLocations(s.pid)
 	if err != nil {

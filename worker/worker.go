@@ -528,6 +528,13 @@ func (m *Worker) GetState() (*State, error) {
 	return state, nil
 }
 
+func (m *Worker) GetInitialCheckpoint() (*State, error) {
+	if len(m.checkpoints) == 0 {
+		return nil, fmt.Errorf("no initial checkpoint")
+	}
+	return m.checkpoints[0], nil
+}
+
 // SetRegs returns registers to their values in state
 // Caller must ensure tasks are stopped
 func (m *Worker) SetRegs(state *State) error {

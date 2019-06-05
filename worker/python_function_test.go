@@ -193,5 +193,36 @@ var _ = Describe("Python Serverless Function Management", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(response).To(Equal(request))
 		})
+
+		It("can see if the program break has changed", func() {
+			longStringFunc := `
+import random
+import string
+
+def randomString(stringLength=10):
+		letters = string.ascii_lowercase
+		return ''.join(random.choice(letters) for i in range(stringLength))
+
+def main(params):
+		strings = []
+		for i in range(5):
+				strings.append(randomString(100000))
+		to_return = random.randint(0, 4)
+		return strings[to_return]
+`
+
+			Expect(worker.Activate()).To(Succeed())
+			Expect(worker.SendFunction(longStringFunc)).To(Succeed())
+			response, err := worker.SendRequest("")
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(len(response.(string))).To(Equal(100000))
+
+			state, err := worker.GetInitialCheckpoint()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(state.MemoryChanged()).To(BeTrue())
+			Expect(state.ProgramBreakChanged()).To(BeTrue())
+		})
 	})
 })

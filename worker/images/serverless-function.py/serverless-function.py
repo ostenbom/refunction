@@ -26,7 +26,6 @@ def start_function_server():
             log(f"received request: {data}")
             result = main(data)
             send_data("response", result)
-            log(f"sent response: {result}")
 
     # Never finishes. Either killed or restored
 
