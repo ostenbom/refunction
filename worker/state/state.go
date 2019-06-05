@@ -9,9 +9,8 @@ import (
 )
 
 type TaskRegState struct {
-	tid          int
-	regs         *syscall.PtraceRegs
-	functionChan chan func(*ptrace.TraceTask)
+	task *ptrace.TraceTask
+	regs *syscall.PtraceRegs
 }
 
 type State struct {
@@ -40,9 +39,8 @@ func NewState(pid int, tasks map[int]*ptrace.TraceTask) (*State, error) {
 				errors <- err
 			}
 			results <- TaskRegState{
-				tid:          t.Tid,
-				regs:         &regs,
-				functionChan: t.InStopFunction,
+				task: t,
+				regs: &regs,
 			}
 		}
 	}
@@ -56,7 +54,7 @@ func NewState(pid int, tasks map[int]*ptrace.TraceTask) (*State, error) {
 	}
 
 	for result := range results {
-		state.registers[result.tid] = result
+		state.registers[result.task.Tid] = result
 	}
 
 	memoryLocations, err := newMemoryLocations(pid)
@@ -88,7 +86,7 @@ func (s *State) RestoreRegs() error {
 	for tid := range s.registers {
 		wg.Add(1)
 		regState := s.registers[tid]
-		regState.functionChan <- func(t *ptrace.TraceTask) {
+		regState.task.InStopFunction <- func(t *ptrace.TraceTask) {
 			defer wg.Done()
 			err := syscall.PtraceSetRegs(t.Tid, regState.regs)
 			if err != nil {
@@ -104,6 +102,53 @@ func (s *State) RestoreRegs() error {
 		break
 	}
 	return nil
+}
+
+func (s *State) RestoreProgramBreak() error {
+	// We could work on any thread
+	regState := s.chooseAnyRegState()
+	regsChan := make(chan syscall.PtraceRegs)
+	errorsChan := make(chan error)
+	regState.task.InStopFunction <- func(t *ptrace.TraceTask) {
+		var regs syscall.PtraceRegs
+		err := syscall.PtraceGetRegs(t.Tid, &regs)
+		if err != nil {
+			errorsChan <- err
+		}
+		regsChan <- regs
+	}
+
+	var currentRegs syscall.PtraceRegs
+	select {
+	case err := <-errorsChan:
+		return fmt.Errorf("could not get regs: %s", err)
+	case regs := <-regsChan:
+		currentRegs = regs
+	}
+
+	// Set registers to correct arguments
+	// 12 is brk
+	currentRegs.Rax = 12
+	beforeHeap, err := s.getMemory("[heap]")
+	if err != nil {
+		return err
+	}
+	currentRegs.Rdi = uint64(beforeHeap.endOffset)
+
+	regState.task.RunSyscall <- currentRegs
+	returnRegs := <-regState.task.SyscallReturn
+	if returnRegs.Rax != uint64(beforeHeap.endOffset) {
+		return fmt.Errorf("could not restore the program break")
+	}
+
+	return nil
+}
+
+func (s *State) chooseAnyRegState() TaskRegState {
+	for tid := range s.registers {
+		return s.registers[tid]
+	}
+	return TaskRegState{}
 }
 
 func (s *State) PC() uint64 {

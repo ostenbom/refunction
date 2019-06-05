@@ -19,6 +19,8 @@ type TraceTask struct {
 	HasContinued   chan int
 	Detach         chan int
 	HasDetached    chan int
+	RunSyscall     chan syscall.PtraceRegs
+	SyscallReturn  chan syscall.PtraceRegs
 	InStopFunction chan func(*TraceTask)
 	Error          chan error
 	attachOptions  []int
@@ -35,6 +37,8 @@ func NewTraceTask(tid int, gid int, attachOptions []int, straceEnabled bool, wri
 		HasContinued:   make(chan int),
 		Detach:         make(chan int),
 		HasDetached:    make(chan int),
+		RunSyscall:     make(chan syscall.PtraceRegs),
+		SyscallReturn:  make(chan syscall.PtraceRegs),
 		InStopFunction: make(chan func(*TraceTask)),
 		Error:          make(chan error),
 		attachOptions:  attachOptions,
@@ -169,6 +173,9 @@ func (t *TraceTask) awaitContinueOrders() (bool, error) {
 			}
 			t.HasContinued <- 1
 			return true, nil
+		case regs := <-t.RunSyscall:
+			returnRegs := t.runSyscall(regs)
+			t.SyscallReturn <- returnRegs
 		case <-t.Detach:
 			err := syscall.PtraceDetach(t.Tid)
 			if err != nil {
@@ -189,6 +196,77 @@ func (t *TraceTask) popWait() {
 	default:
 		break
 	}
+}
+
+func (t *TraceTask) runSyscall(regs syscall.PtraceRegs) syscall.PtraceRegs {
+	// Get current Rip data
+	preSyscallInstruction := make([]byte, 2)
+	count, err := syscall.PtracePeekData(t.Tid, uintptr(regs.PC()), preSyscallInstruction)
+	if err != nil || count != 2 {
+		fmt.Println("bad ptrace peek")
+	}
+
+	// Change instruction at Rip to be 0f 05 (syscall)
+	syscallInstruction := []byte{byte(0x0f), byte(0x05)}
+	count, err = syscall.PtracePokeData(t.Tid, uintptr(regs.PC()), syscallInstruction)
+	if err != nil || count != 2 {
+		fmt.Println("bad ptrace poke")
+	}
+
+	// Change regs for syscall
+	err = syscall.PtraceSetRegs(t.Tid, &regs)
+	if err != nil {
+		fmt.Println("bad set regs")
+	}
+
+	// Continue to stop at next syscall
+	err = syscall.PtraceSyscall(t.Tid, 0)
+	if err != nil {
+		fmt.Println("bad syscall cont")
+	}
+
+	// Let enter syscall
+	var waitStat syscall.WaitStatus
+	_, err = syscall.Wait4(t.Tid, &waitStat, syscall.WALL, nil)
+	if err != nil {
+		fmt.Println("bad wait")
+	}
+
+	if waitStat.StopSignal() != syscall.SIGTRAP|0x80 {
+		fmt.Println("oh dear not a syscall")
+	}
+
+	err = syscall.PtraceSyscall(t.Tid, 0)
+	if err != nil {
+		fmt.Println("bad syscall cont")
+	}
+
+	// Catch exit. Change Rip back. Set instruction at Rip back to what it was.
+	_, err = syscall.Wait4(t.Tid, &waitStat, syscall.WALL, nil)
+	if err != nil {
+		fmt.Println("bad wait")
+	}
+
+	if waitStat.StopSignal() != syscall.SIGTRAP|0x80 {
+		fmt.Println("oh dear not a syscall on exit")
+	}
+
+	var exitRegs syscall.PtraceRegs
+	err = syscall.PtraceGetRegs(t.Tid, &exitRegs)
+	if err != nil {
+		fmt.Println("bad get regs")
+	}
+
+	count, err = syscall.PtracePokeData(t.Tid, uintptr(regs.PC()), preSyscallInstruction)
+	if err != nil || count != 2 {
+		fmt.Println("bad ptrace peek")
+	}
+	err = syscall.PtraceSetRegs(t.Tid, &regs)
+	if err != nil {
+		fmt.Println("bad set regs")
+	}
+
+	return exitRegs
 }
 
 func (t *TraceTask) continueTrace(signal syscall.Signal) error {

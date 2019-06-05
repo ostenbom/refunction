@@ -30,6 +30,7 @@ var _ = Describe("Worker Restoring", func() {
 			var err error
 			worker, err = NewWorker(id, client, runtime, targetLayer)
 			Expect(err).NotTo(HaveOccurred())
+			worker.WithSyscallTrace(GinkgoWriter)
 			Expect(worker.Start()).To(Succeed())
 		})
 
@@ -289,6 +290,62 @@ var _ = Describe("Worker Restoring", func() {
 				Expect(err).NotTo(HaveOccurred())
 				numberPrintedIncrements := strings.Count(string(countContent), incrementedLine)
 				Expect(numberPrintedIncrements).To(Equal(2))
+			})
+		})
+
+		Context("when a python program uses enough memory for the program break to change", func() {
+			largeMemoryFunc := `
+import random
+import string
+
+def randomString(stringLength=10):
+		letters = string.ascii_lowercase
+		return ''.join(random.choice(letters) for i in range(stringLength))
+
+def main(params):
+		strings = []
+		for i in range(5):
+				strings.append(randomString(100000))
+		to_return = random.randint(0, 4)
+		return strings[to_return]
+`
+
+			BeforeEach(func() {
+				runtime = "python"
+				targetLayer = "serverless-function.py"
+			})
+
+			It("can see if the program break has changed", func() {
+				Expect(worker.Activate()).To(Succeed())
+				Expect(worker.SendFunction(largeMemoryFunc)).To(Succeed())
+				response, err := worker.SendRequest("")
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(len(response.(string))).To(Equal(100000))
+
+				state, err := worker.GetInitialCheckpoint()
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(state.MemoryChanged()).To(BeTrue())
+				Expect(state.ProgramBreakChanged()).To(BeTrue())
+			})
+
+			It("can reset the program break", func() {
+				Expect(worker.Activate()).To(Succeed())
+				initialState, err := worker.GetInitialCheckpoint()
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(worker.SendFunction(largeMemoryFunc)).To(Succeed())
+				response, err := worker.SendRequest("")
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(len(response.(string))).To(Equal(100000))
+
+				Expect(worker.Restore()).To(Succeed())
+
+				changed, err := initialState.ProgramBreakChanged()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(changed).To(BeFalse())
 			})
 		})
 	})

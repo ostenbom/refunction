@@ -437,6 +437,17 @@ func (m *Worker) Restore() error {
 
 	start := time.Now()
 
+	changed, err := state.ProgramBreakChanged()
+	if err != nil {
+		return fmt.Errorf("could not check program break on restore: %s", err)
+	}
+	if changed {
+		err := state.RestoreProgramBreak()
+		if err != nil {
+			return fmt.Errorf("count not restore program break: %s", err)
+		}
+	}
+
 	err = state.RestoreDirtyPages()
 	if err != nil {
 		return fmt.Errorf("could not restore stack: %s", err)
@@ -445,6 +456,7 @@ func (m *Worker) Restore() error {
 	if err != nil {
 		return fmt.Errorf("could not restore regs: %s", err)
 	}
+
 	fmt.Printf("restore time: %s", time.Since(start))
 
 	m.Continue()
