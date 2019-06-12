@@ -78,7 +78,9 @@ var _ = Describe("Network", func() {
 				Expect(worker.IP).NotTo(BeNil())
 			})
 
-			It("can connect and echo", func() {
+			// Flakey test. Functionality currently not in use since communication done
+			// via stdin
+			XIt("can connect and echo", func() {
 				tcpAddr := net.TCPAddr{
 					IP:   worker.IP,
 					Port: 5000,
