@@ -1,31 +1,21 @@
-dist: xenial
+dist: bionic
 sudo: required
 
 language: go
 go:
   - 1.12.x
-  - tip
 
 env:
-  - GO111MODULE=on
-
-matrix:
-  allow_failures:
-    - go: tip
+  - GO111MODULE="on"
 
 before_install:
-  - sudo apt-get install -y libseccomp-dev
+  - sudo apt-get install -y libseccomp-dev containerd
 
 install:
-  - wget https://github.com/containerd/containerd/releases/download/v1.2.2/containerd-1.2.2.linux-amd64.tar.gz
-  - tar -xvf containerd-1.2.2.linux-amd64.tar.gz
-  - export PATH=$PATH:$PWD/bin/
   - sudo curl -fSL "https://github.com/genuinetools/netns/releases/download/v0.5.3/netns-linux-amd64" -o /usr/local/bin/netns
   - sudo chmod a+x /usr/local/bin/netns
-  - pushd $GOPATH && env GO111MODULE=off go get github.com/opencontainers/runc && popd
-  - pushd $GOPATH && env GO111MODULE=off go get github.com/onsi/ginkgo/ginkgo && popd
+  - pushd $GOPATH && go get github.com/onsi/ginkgo/ginkgo && popd
   - pushd $GOPATH && env GO111MODULE=off go get github.com/onsi/gomega/... && popd
-  - pushd $GOPATH/src/github.com/opencontainers/runc && make && sudo make install && popd
   - go build ./...
   - ./getruntimes/download_runtimes.sh
 
