@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/burntsushi/toml"
+	"github.com/BurntSushi/toml"
 	"github.com/ostenbom/refunction/invoker/messages"
 	"github.com/ostenbom/refunction/invoker/storage"
 	"github.com/ostenbom/refunction/invoker/types"

@@ -2,14 +2,22 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"log"
+	"path/filepath"
 
+	"github.com/containerd/containerd"
+	containerdCRIconfig "github.com/containerd/cri/pkg/config"
+	containerdCRIserver "github.com/containerd/cri/pkg/server"
 	"google.golang.org/grpc"
 	runtime "k8s.io/cri-api/pkg/apis/runtime/v1alpha2"
 )
 
 const (
-	kubeAPIVersion    = "0.1.0"
-	runtimeAPIVersion = "v1alpha2"
+	kubeAPIVersion            = "0.1.0"
+	runtimeAPIVersion         = "v1alpha2"
+	defaultContainerdRootDir  = "/var/lib/containerd"
+	defaultContainerdStateDir = "/run/containerd"
 )
 
 type CRIService interface {
@@ -18,11 +26,35 @@ type CRIService interface {
 }
 
 type criService struct {
+	client        *containerd.Client
+	containerdCRI containerdCRIserver.CRIService
 }
 
-func NewCRIService() CRIService {
-	c := &criService{}
-	return c
+func NewCRIService(client *containerd.Client) (CRIService, error) {
+	criConfig := containerdCRIconfig.Config{
+		PluginConfig:       containerdCRIconfig.DefaultConfig(),
+		ContainerdRootDir:  defaultContainerdRootDir,
+		ContainerdEndpoint: filepath.Join(defaultContainerdStateDir, "containerd.sock"),
+		RootDir:            filepath.Join(defaultContainerdRootDir, "refunction.v1.cri"),
+		StateDir:           defaultContainerdStateDir,
+	}
+
+	containerdCRI, err := containerdCRIserver.NewCRIService(criConfig, client)
+	if err != nil {
+		return nil, fmt.Errorf("could not start containerdCRI: %v", err)
+	}
+
+	go func() {
+		if err := containerdCRI.Run(); err != nil {
+			log.Fatalf("containerdCRI run error: %v\n", err)
+		}
+	}()
+
+	c := &criService{
+		client:        client,
+		containerdCRI: containerdCRI,
+	}
+	return c, nil
 }
 
 func (c *criService) register(s *grpc.Server) {

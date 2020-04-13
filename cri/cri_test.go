@@ -1,6 +1,7 @@
 package main_test
 
 import (
+	"github.com/containerd/containerd"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -11,10 +12,20 @@ import (
 
 var _ = Describe("CRI Service", func() {
 	var c CRIService
+	var containerdClient containerd.Client
 	ctx := context.Background()
 
 	BeforeEach(func() {
-		c = NewCRIService()
+		containerdClient, err := containerd.New("/run/containerd/containerd.sock")
+		Expect(err).NotTo(HaveOccurred())
+
+		c, err = NewCRIService(containerdClient)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	AfterEach(func() {
+		err := containerdClient.Close()
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	Describe("Version", func() {

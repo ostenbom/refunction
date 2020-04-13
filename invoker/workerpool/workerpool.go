@@ -15,7 +15,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/burntsushi/toml"
+	"github.com/BurntSushi/toml"
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/ostenbom/refunction/invoker/types"

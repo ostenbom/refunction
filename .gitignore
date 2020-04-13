@@ -15,5 +15,9 @@
 worker/runtimes/*
 getruntimes/aws_env
 
+# Don't store binaries
+cri/cri
+invoker/invoker
+
 # Pretty sure we don't need this
 .gobincache
