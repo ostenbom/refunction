@@ -55,7 +55,7 @@ var _ = Describe("CRI Service", func() {
 	})
 
 	Describe("StopPodSandbox", func() {
-		It("returns a non-nil _onse", func() {
+		It("calls containerd StopSandBox", func() {
 			_, err := c.StopPodSandbox(ctx, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(containerdCRI.StopPodSandboxCallCount()).To(Equal(1))
@@ -63,7 +63,7 @@ var _ = Describe("CRI Service", func() {
 	})
 
 	Describe("RemovePodSandbox", func() {
-		It("returns a non-nil _onse", func() {
+		It("calls containerd", func() {
 			_, err := c.RemovePodSandbox(ctx, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(containerdCRI.RemovePodSandboxCallCount()).To(Equal(1))
@@ -71,7 +71,7 @@ var _ = Describe("CRI Service", func() {
 	})
 
 	Describe("ListPodSandbox", func() {
-		It("returns a non-nil _onse", func() {
+		It("calls containerd", func() {
 			_, err := c.ListPodSandbox(ctx, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(containerdCRI.ListPodSandboxCallCount()).To(Equal(1))
@@ -79,7 +79,7 @@ var _ = Describe("CRI Service", func() {
 	})
 
 	Describe("CreateContainer", func() {
-		It("returns a non-nil _onse", func() {
+		It("calls containerd", func() {
 			_, err := c.CreateContainer(ctx, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(containerdCRI.CreateContainerCallCount()).To(Equal(1))
@@ -87,7 +87,7 @@ var _ = Describe("CRI Service", func() {
 	})
 
 	Describe("StartContainer", func() {
-		It("returns a non-nil _onse", func() {
+		It("calls containerd", func() {
 			_, err := c.StartContainer(ctx, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(containerdCRI.StartContainerCallCount()).To(Equal(1))
@@ -95,7 +95,7 @@ var _ = Describe("CRI Service", func() {
 	})
 
 	Describe("StopContainer", func() {
-		It("returns a non-nil _onse", func() {
+		It("calls containerd", func() {
 			_, err := c.StopContainer(ctx, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(containerdCRI.StopContainerCallCount()).To(Equal(1))
@@ -103,7 +103,7 @@ var _ = Describe("CRI Service", func() {
 	})
 
 	Describe("RemoveContainer", func() {
-		It("returns a non-nil _onse", func() {
+		It("calls containerd", func() {
 			_, err := c.RemoveContainer(ctx, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(containerdCRI.RemoveContainerCallCount()).To(Equal(1))
@@ -111,7 +111,7 @@ var _ = Describe("CRI Service", func() {
 	})
 
 	Describe("ListContainers", func() {
-		It("returns a non-nil _onse", func() {
+		It("calls containerd", func() {
 			_, err := c.ListContainers(ctx, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(containerdCRI.ListContainersCallCount()).To(Equal(1))
@@ -119,7 +119,7 @@ var _ = Describe("CRI Service", func() {
 	})
 
 	Describe("ContainerStatus", func() {
-		It("returns a non-nil _onse", func() {
+		It("calls containerd", func() {
 			_, err := c.ContainerStatus(ctx, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(containerdCRI.ContainerStatusCallCount()).To(Equal(1))
@@ -127,7 +127,7 @@ var _ = Describe("CRI Service", func() {
 	})
 
 	Describe("UpdateContainerResources", func() {
-		It("returns a non-nil _onse", func() {
+		It("calls containerd", func() {
 			_, err := c.UpdateContainerResources(ctx, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(containerdCRI.UpdateContainerResourcesCallCount()).To(Equal(1))
@@ -135,7 +135,7 @@ var _ = Describe("CRI Service", func() {
 	})
 
 	Describe("ReopenContainerLog", func() {
-		It("returns a non-nil _onse", func() {
+		It("calls containerd", func() {
 			_, err := c.ReopenContainerLog(ctx, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(containerdCRI.ReopenContainerLogCallCount()).To(Equal(1))
@@ -143,7 +143,7 @@ var _ = Describe("CRI Service", func() {
 	})
 
 	Describe("ExecSync", func() {
-		It("returns a non-nil _onse", func() {
+		It("calls containerd", func() {
 			_, err := c.ExecSync(ctx, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(containerdCRI.ExecSyncCallCount()).To(Equal(1))
@@ -151,7 +151,7 @@ var _ = Describe("CRI Service", func() {
 	})
 
 	Describe("Exec", func() {
-		It("returns a non-nil _onse", func() {
+		It("calls containerd", func() {
 			_, err := c.Exec(ctx, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(containerdCRI.ExecCallCount()).To(Equal(1))
@@ -159,7 +159,7 @@ var _ = Describe("CRI Service", func() {
 	})
 
 	Describe("Attach", func() {
-		It("returns a non-nil _onse", func() {
+		It("calls containerd", func() {
 			_, err := c.Attach(ctx, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(containerdCRI.AttachCallCount()).To(Equal(1))
@@ -167,7 +167,7 @@ var _ = Describe("CRI Service", func() {
 	})
 
 	Describe("PortForward", func() {
-		It("returns a non-nil _onse", func() {
+		It("calls containerd", func() {
 			_, err := c.PortForward(ctx, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(containerdCRI.PortForwardCallCount()).To(Equal(1))
@@ -175,7 +175,7 @@ var _ = Describe("CRI Service", func() {
 	})
 
 	Describe("ContainerStats", func() {
-		It("returns a non-nil _onse", func() {
+		It("calls containerd", func() {
 			_, err := c.ContainerStats(ctx, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(containerdCRI.ContainerStatsCallCount()).To(Equal(1))
@@ -183,7 +183,7 @@ var _ = Describe("CRI Service", func() {
 	})
 
 	Describe("ListContainerStats", func() {
-		It("returns a non-nil _onse", func() {
+		It("calls containerd", func() {
 			_, err := c.ListContainerStats(ctx, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(containerdCRI.ListContainerStatsCallCount()).To(Equal(1))
@@ -191,7 +191,7 @@ var _ = Describe("CRI Service", func() {
 	})
 
 	Describe("UpdateRuntimeConfig", func() {
-		It("returns a non-nil _onse", func() {
+		It("calls containerd", func() {
 			_, err := c.UpdateRuntimeConfig(ctx, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(containerdCRI.UpdateRuntimeConfigCallCount()).To(Equal(1))
@@ -199,10 +199,50 @@ var _ = Describe("CRI Service", func() {
 	})
 
 	Describe("Status", func() {
-		It("returns a non-nil _onse", func() {
+		It("calls containerd", func() {
 			_, err := c.Status(ctx, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(containerdCRI.StatusCallCount()).To(Equal(1))
+		})
+	})
+
+	Describe("ListImages", func() {
+		It("calls containerd", func() {
+			_, err := c.ListImages(ctx, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(containerdCRI.ListImagesCallCount()).To(Equal(1))
+		})
+	})
+
+	Describe("ImageStatus", func() {
+		It("calls containerd", func() {
+			_, err := c.ImageStatus(ctx, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(containerdCRI.ImageStatusCallCount()).To(Equal(1))
+		})
+	})
+
+	Describe("PullImage", func() {
+		It("calls containerd", func() {
+			_, err := c.PullImage(ctx, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(containerdCRI.PullImageCallCount()).To(Equal(1))
+		})
+	})
+
+	Describe("RemoveImage", func() {
+		It("calls containerd", func() {
+			_, err := c.RemoveImage(ctx, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(containerdCRI.RemoveImageCallCount()).To(Equal(1))
+		})
+	})
+
+	Describe("ImageFsInfo", func() {
+		It("calls containerd", func() {
+			_, err := c.ImageFsInfo(ctx, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(containerdCRI.ImageFsInfoCallCount()).To(Equal(1))
 		})
 	})
 })

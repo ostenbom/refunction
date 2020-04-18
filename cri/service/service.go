@@ -22,6 +22,7 @@ const (
 
 type CRIService interface {
 	runtime.RuntimeServiceServer
+	runtime.ImageServiceServer
 	Register(*grpc.Server)
 }
 
@@ -214,4 +215,33 @@ func (c *criService) UpdateRuntimeConfig(ctx context.Context, req *runtime.Updat
 // Status returns the status of the runtime.
 func (c *criService) Status(ctx context.Context, req *runtime.StatusRequest) (*runtime.StatusResponse, error) {
 	return c.containerdCRI.Status(ctx, req)
+}
+
+// ListImages lists existing images.
+func (c *criService) ListImages(ctx context.Context, req *runtime.ListImagesRequest) (*runtime.ListImagesResponse, error) {
+	return c.containerdCRI.ListImages(ctx, req)
+}
+
+// ImageStatus returns the status of the image. If the image is not
+// present, returns a response with ImageStatusResponse.Image set to
+// nil.
+func (c *criService) ImageStatus(ctx context.Context, req *runtime.ImageStatusRequest) (*runtime.ImageStatusResponse, error) {
+	return c.containerdCRI.ImageStatus(ctx, req)
+}
+
+// PullImage pulls an image with authentication config.
+func (c *criService) PullImage(ctx context.Context, req *runtime.PullImageRequest) (*runtime.PullImageResponse, error) {
+	return c.containerdCRI.PullImage(ctx, req)
+}
+
+// RemoveImage removes the image.
+// This call is idempotent, and must not return an error if the image has
+// already been removed.
+func (c *criService) RemoveImage(ctx context.Context, req *runtime.RemoveImageRequest) (*runtime.RemoveImageResponse, error) {
+	return c.containerdCRI.RemoveImage(ctx, req)
+}
+
+// ImageFSInfo returns information of the filesystem that is used to store images.
+func (c *criService) ImageFsInfo(ctx context.Context, req *runtime.ImageFsInfoRequest) (*runtime.ImageFsInfoResponse, error) {
+	return c.containerdCRI.ImageFsInfo(ctx, req)
 }
