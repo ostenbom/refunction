@@ -12,11 +12,12 @@ import (
 
 var _ = Describe("CRI Service", func() {
 	var c CRIService
+	var containerdCRI *servicefakes.FakeContainerdCRIService
 	ctx := context.Background()
 
 	BeforeEach(func() {
-		fakeContainerdCRI := new(servicefakes.FakeContainerdCRIService)
-		c = NewFakeCRIService(fakeContainerdCRI)
+		containerdCRI = new(servicefakes.FakeContainerdCRIService)
+		c = NewFakeCRIService(containerdCRI)
 	})
 
 	Describe("Version", func() {
@@ -46,10 +47,10 @@ var _ = Describe("CRI Service", func() {
 	})
 
 	Describe("RunPodSandbox", func() {
-		It("returns a non-nil response", func() {
-			resp, err := c.RunPodSandbox(ctx, nil)
-			Expect(err).To(BeNil())
-			Expect(resp).NotTo(BeNil())
+		It("calls containerd RunSandbox", func() {
+			_, err := c.RunPodSandbox(ctx, nil)
+			Expect(err).NotTo(BeNil())
+			Expect(containerdCRI.RunPodSandboxCallCount()).To(Equal(1))
 		})
 	})
 

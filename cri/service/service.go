@@ -22,7 +22,7 @@ const (
 
 type CRIService interface {
 	runtime.RuntimeServiceServer
-	register(*grpc.Server)
+	Register(*grpc.Server)
 }
 
 //go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 . ContainerdCRIService
@@ -72,7 +72,7 @@ func NewFakeCRIService(containerdCRI ContainerdCRIService) CRIService {
 	return c
 }
 
-func (c *criService) register(s *grpc.Server) {
+func (c *criService) Register(s *grpc.Server) {
 	runtime.RegisterRuntimeServiceServer(s, c)
 }
 
@@ -88,8 +88,8 @@ func (c *criService) Version(context.Context, *runtime.VersionRequest) (*runtime
 
 // RunPodSandbox creates and starts a pod-level sandbox. Runtimes must ensure
 // the sandbox is in the ready state on success.
-func (c *criService) RunPodSandbox(context.Context, *runtime.RunPodSandboxRequest) (*runtime.RunPodSandboxResponse, error) {
-	return &runtime.RunPodSandboxResponse{}, nil
+func (c *criService) RunPodSandbox(ctx context.Context, req *runtime.RunPodSandboxRequest) (*runtime.RunPodSandboxResponse, error) {
+	return c.containerdCRI.RunPodSandbox(ctx, req)
 }
 
 // StopPodSandbox stops any running process that is part of the sandbox and

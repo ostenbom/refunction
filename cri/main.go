@@ -44,7 +44,7 @@ func startCRIService() int {
 	}
 
 	grpcServer := grpc.NewServer()
-	criService.register(grpcServer)
+	criService.Register(grpcServer)
 
 	err = grpcServer.Serve(lis)
 	if err != nil {
