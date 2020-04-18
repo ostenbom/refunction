@@ -37,8 +37,13 @@ type criService struct {
 }
 
 func NewCRIService(client *containerd.Client) (CRIService, error) {
+	containerdPluginConf := containerdCRIconfig.DefaultConfig()
+	containerdPluginConf.ContainerdConfig.Runtimes["runc"] = containerdCRIconfig.Runtime{
+		Type: "io.containerd.runtime.v1.linux",
+	}
+
 	criConfig := containerdCRIconfig.Config{
-		PluginConfig:       containerdCRIconfig.DefaultConfig(),
+		PluginConfig:       containerdPluginConf,
 		ContainerdRootDir:  defaultContainerdRootDir,
 		ContainerdEndpoint: filepath.Join(defaultContainerdStateDir, "containerd.sock"),
 		RootDir:            filepath.Join(defaultContainerdRootDir, "refunction.v1.cri"),
@@ -75,6 +80,7 @@ func NewFakeCRIService(containerdCRI ContainerdCRIService) CRIService {
 
 func (c *criService) Register(s *grpc.Server) {
 	runtime.RegisterRuntimeServiceServer(s, c)
+	runtime.RegisterImageServiceServer(s, c)
 }
 
 // Version returns the runtime name, runtime version, and runtime API version.

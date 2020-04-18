@@ -8,3 +8,23 @@ We investigate the possibility of restoring function containers as an alternativ
 Our method focuses on Linux process primitives. We store and modify state such as raw memory and registers in order to reset the process to the way it was before the user’s function was loaded. We discuss how to ensure temporal isolation in order to provide security guarantees in such a system. We find that it is possible to restore container processes in a variety of runtimes. Using this approach can decrease the effect of cold starts by up to 20x and increase the overall throughput of such systems. 
 
 [The full report can be found here](report.pdf)
+
+## Get started on `minikube`
+
+```
+ minikube start \
+    --container-runtime=containerd \
+    --network-plugin=cni \
+    --enable-default-cni \
+    --cri-socket=/tmp/refunction.sock \
+    --extra-config=kubelet.container-runtime=remote \
+    --extra-config=kubelet.container-runtime-endpoint=unix:///tmp/refunction.sock \
+    --extra-config=kubelet.image-service-endpoint=unix:///tmp/refunction.sock
+ ```
+
+Then:
+```
+$ minikube ssh
+$ curl https://refunction-cri.s3.amazonaws.com/cri -o cri && chmod +x cri
+$ sudo ./cri
+```

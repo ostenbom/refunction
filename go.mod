@@ -4,14 +4,17 @@ go 1.14
 
 require (
 	github.com/BurntSushi/toml v0.3.1
+	github.com/Microsoft/go-winio v0.4.15-0.20190919025122-fc70bd9a86b5 // indirect
 	github.com/Microsoft/hcsshim v0.8.7 // indirect
 	github.com/burntsushi/toml v0.3.1
 	github.com/containerd/cgroups v0.0.0-20200407151229-7fc7a507c04c // indirect
+	github.com/containerd/console v0.0.0-20181022165439-0650fd9eeb50 // indirect
 	github.com/containerd/containerd v1.3.3
 	github.com/containerd/continuity v0.0.0-20200413184840-d3ef23f19fbb // indirect
 	github.com/containerd/cri v1.11.1-0.20200401132722-7013a825b0a7
 	github.com/containerd/fifo v0.0.0-20200410184934-f15a3290365b // indirect
 	github.com/containerd/go-cni v0.0.0-20200107172653-c154a49e2c75 // indirect
+	github.com/containerd/go-runc v0.0.0-20190911050354-e029b79d8cda // indirect
 	github.com/containerd/imgcrypt v1.0.1 // indirect
 	github.com/containerd/ttrpc v1.0.0 // indirect
 	github.com/containerd/typeurl v1.0.0 // indirect
@@ -24,21 +27,32 @@ require (
 	github.com/flimzy/kivik v1.8.1
 	github.com/flimzy/testy v0.1.16 // indirect
 	github.com/go-kivik/couchdb v1.8.1
+	github.com/godbus/dbus v0.0.0-20190422162347-ade71ed3457e // indirect
 	github.com/gogo/googleapis v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect
 	github.com/golang/protobuf v1.4.0 // indirect
 	github.com/gopherjs/gopherjs v0.0.0-20190430165422-3e4dfb77656c // indirect
+	github.com/hashicorp/errwrap v0.0.0-20141028054710-7554cd9344ce // indirect
+	github.com/hashicorp/go-multierror v0.0.0-20161216184304-ed905158d874 // indirect
 	github.com/hashicorp/golang-lru v0.5.4
+	github.com/imdario/mergo v0.3.8 // indirect
 	github.com/json-iterator/go v1.1.9 // indirect
 	github.com/maxbrunsfeld/counterfeiter/v6 v6.2.3
 	github.com/onsi/ginkgo v1.11.0
 	github.com/onsi/gomega v1.9.0
+	github.com/opencontainers/go-digest v1.0.0-rc1.0.20180430190053-c9281466c8b2 // indirect
+	github.com/opencontainers/runc v1.0.0-rc8.0.20190926000215-3e425f80a8c9 // indirect
 	github.com/opencontainers/runtime-spec v1.0.2
+	github.com/opencontainers/runtime-tools v0.0.0-20181011054405-1d69bd0f9c39 // indirect
 	github.com/opencontainers/selinux v1.5.1 // indirect
 	github.com/ostenbom/kafka-go v0.2.5-0.20190508091439-26e4b58c5948
+	github.com/prometheus/procfs v0.0.8 // indirect
 	github.com/seccomp/libseccomp-golang v0.9.1
 	github.com/sirupsen/logrus v1.5.0
 	github.com/tchap/go-patricia v2.3.0+incompatible // indirect
+	github.com/xeipuuv/gojsonpointer v0.0.0-20180127040702-4e3ac2762d5f // indirect
+	github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415 // indirect
+	github.com/xeipuuv/gojsonschema v0.0.0-20180618132009-1d523034197f // indirect
 	go.opencensus.io v0.22.3 // indirect
 	golang.org/x/crypto v0.0.0-20200406173513-056763e48d71 // indirect
 	golang.org/x/net v0.0.0-20200324143707-d3edc9973b7e // indirect

@@ -12,6 +12,7 @@ import (
 
 var GRPCSocketAddr = "/tmp/refunction.sock"
 var containerdSocketAddr = "/run/containerd/containerd.sock"
+var K8sContainerdNamespace = "k8s.io"
 
 func startCRIService() int {
 	if err := os.RemoveAll(GRPCSocketAddr); err != nil {
@@ -31,7 +32,7 @@ func startCRIService() int {
 		return 1
 	}
 
-	client, err := containerd.New(containerdSocketAddr)
+	client, err := containerd.New(containerdSocketAddr, containerd.WithDefaultNamespace(K8sContainerdNamespace))
 	if err != nil {
 		log.Fatalf("could not connect to containerd client: %s", err)
 		return 1
@@ -44,6 +45,7 @@ func startCRIService() int {
 	}
 
 	grpcServer := grpc.NewServer()
+
 	criService.Register(grpcServer)
 
 	err = grpcServer.Serve(lis)
