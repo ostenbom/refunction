@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/burntsushi/toml"
+	"github.com/BurntSushi/toml"
 	"github.com/containerd/containerd"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

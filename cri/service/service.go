@@ -1,4 +1,4 @@
-package main
+package service
 
 import (
 	"context"
@@ -25,9 +25,14 @@ type CRIService interface {
 	register(*grpc.Server)
 }
 
+//go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 . ContainerdCRIService
+type ContainerdCRIService interface {
+	containerdCRIserver.CRIService
+}
+
 type criService struct {
 	client        *containerd.Client
-	containerdCRI containerdCRIserver.CRIService
+	containerdCRI ContainerdCRIService
 }
 
 func NewCRIService(client *containerd.Client) (CRIService, error) {
@@ -54,7 +59,17 @@ func NewCRIService(client *containerd.Client) (CRIService, error) {
 		client:        client,
 		containerdCRI: containerdCRI,
 	}
+
 	return c, nil
+}
+
+func NewFakeCRIService(containerdCRI ContainerdCRIService) CRIService {
+	c := &criService{
+		client:        &containerd.Client{},
+		containerdCRI: containerdCRI,
+	}
+
+	return c
 }
 
 func (c *criService) register(s *grpc.Server) {

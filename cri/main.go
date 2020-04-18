@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/containerd/containerd"
+	"github.com/ostenbom/refunction/cri/service"
 	"google.golang.org/grpc"
 )
 
@@ -36,7 +37,7 @@ func startCRIService() int {
 		return 1
 	}
 
-	criService, err := NewCRIService(client)
+	criService, err := service.NewCRIService(client)
 	if err != nil {
 		log.Fatalf("could not start CRI: %s", err)
 		return 1

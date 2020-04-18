@@ -1,31 +1,22 @@
-package main_test
+package service_test
 
 import (
-	"github.com/containerd/containerd"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
 	"context"
 
-	. "github.com/ostenbom/refunction/cri"
+	. "github.com/ostenbom/refunction/cri/service"
+	"github.com/ostenbom/refunction/cri/service/servicefakes"
 )
 
 var _ = Describe("CRI Service", func() {
 	var c CRIService
-	var containerdClient containerd.Client
 	ctx := context.Background()
 
 	BeforeEach(func() {
-		containerdClient, err := containerd.New("/run/containerd/containerd.sock")
-		Expect(err).NotTo(HaveOccurred())
-
-		c, err = NewCRIService(containerdClient)
-		Expect(err).NotTo(HaveOccurred())
-	})
-
-	AfterEach(func() {
-		err := containerdClient.Close()
-		Expect(err).NotTo(HaveOccurred())
+		fakeContainerdCRI := new(servicefakes.FakeContainerdCRIService)
+		c = NewFakeCRIService(fakeContainerdCRI)
 	})
 
 	Describe("Version", func() {
