@@ -17,6 +17,7 @@ func startCRIService() int {
 		log.Fatalf("could not remove socket: %v", err)
 		return 1
 	}
+
 	_, err := os.Stat(containerdSocketAddr)
 	if err != nil {
 		log.Fatalf("containerd isn't running or socket does not exist: %v\n", err)
@@ -43,7 +44,12 @@ func startCRIService() int {
 
 	grpcServer := grpc.NewServer()
 	criService.register(grpcServer)
-	grpcServer.Serve(lis)
+
+	err = grpcServer.Serve(lis)
+	if err != nil {
+		log.Fatalf("could not start grpcServer: %v", err)
+		return 1
+	}
 
 	return 0
 }
