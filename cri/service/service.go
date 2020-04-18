@@ -101,69 +101,69 @@ func (c *criService) RunPodSandbox(ctx context.Context, req *runtime.RunPodSandb
 // at least once before calling RemovePodSandbox. It will also attempt to
 // reclaim resources eagerly, as soon as a sandbox is not needed. Hence,
 // multiple StopPodSandbox calls are expected.
-func (c *criService) StopPodSandbox(context.Context, *runtime.StopPodSandboxRequest) (*runtime.StopPodSandboxResponse, error) {
-	return &runtime.StopPodSandboxResponse{}, nil
+func (c *criService) StopPodSandbox(ctx context.Context, req *runtime.StopPodSandboxRequest) (*runtime.StopPodSandboxResponse, error) {
+	return c.containerdCRI.StopPodSandbox(ctx, req)
 }
 
 // RemovePodSandbox removes the sandbox. If there are any running containers
 // in the sandbox, they must be forcibly terminated and removed.
 // This call is idempotent, and must not return an error if the sandbox has
 // already been removed.
-func (c *criService) RemovePodSandbox(context.Context, *runtime.RemovePodSandboxRequest) (*runtime.RemovePodSandboxResponse, error) {
-	return &runtime.RemovePodSandboxResponse{}, nil
+func (c *criService) RemovePodSandbox(ctx context.Context, req *runtime.RemovePodSandboxRequest) (*runtime.RemovePodSandboxResponse, error) {
+	return c.containerdCRI.RemovePodSandbox(ctx, req)
 }
 
 // PodSandboxStatus returns the status of the PodSandbox. If the PodSandbox is not
 // present, returns an error.
-func (c *criService) PodSandboxStatus(context.Context, *runtime.PodSandboxStatusRequest) (*runtime.PodSandboxStatusResponse, error) {
-	return &runtime.PodSandboxStatusResponse{}, nil
+func (c *criService) PodSandboxStatus(ctx context.Context, req *runtime.PodSandboxStatusRequest) (*runtime.PodSandboxStatusResponse, error) {
+	return c.containerdCRI.PodSandboxStatus(ctx, req)
 }
 
 // ListPodSandbox returns a list of PodSandboxes.
-func (c *criService) ListPodSandbox(context.Context, *runtime.ListPodSandboxRequest) (*runtime.ListPodSandboxResponse, error) {
-	return &runtime.ListPodSandboxResponse{}, nil
+func (c *criService) ListPodSandbox(ctx context.Context, req *runtime.ListPodSandboxRequest) (*runtime.ListPodSandboxResponse, error) {
+	return c.containerdCRI.ListPodSandbox(ctx, req)
 }
 
 // CreateContainer creates a new container in specified PodSandbox
-func (c *criService) CreateContainer(context.Context, *runtime.CreateContainerRequest) (*runtime.CreateContainerResponse, error) {
-	return &runtime.CreateContainerResponse{}, nil
+func (c *criService) CreateContainer(ctx context.Context, req *runtime.CreateContainerRequest) (*runtime.CreateContainerResponse, error) {
+	return c.containerdCRI.CreateContainer(ctx, req)
 }
 
 // StartContainer starts the container.
-func (c *criService) StartContainer(context.Context, *runtime.StartContainerRequest) (*runtime.StartContainerResponse, error) {
-	return &runtime.StartContainerResponse{}, nil
+func (c *criService) StartContainer(ctx context.Context, req *runtime.StartContainerRequest) (*runtime.StartContainerResponse, error) {
+	return c.containerdCRI.StartContainer(ctx, req)
 }
 
 // StopContainer stops a running container with a grace period (i.e., timeout).
 // This call is idempotent, and must not return an error if the container has
 // already been stopped.
 // TODO: what must the runtime do after the grace period is reached?
-func (c *criService) StopContainer(context.Context, *runtime.StopContainerRequest) (*runtime.StopContainerResponse, error) {
-	return &runtime.StopContainerResponse{}, nil
+func (c *criService) StopContainer(ctx context.Context, req *runtime.StopContainerRequest) (*runtime.StopContainerResponse, error) {
+	return c.containerdCRI.StopContainer(ctx, req)
 }
 
 // RemoveContainer removes the container. If the container is running, the
 // container must be forcibly removed.
 // This call is idempotent, and must not return an error if the container has
 // already been removed.
-func (c *criService) RemoveContainer(context.Context, *runtime.RemoveContainerRequest) (*runtime.RemoveContainerResponse, error) {
-	return &runtime.RemoveContainerResponse{}, nil
+func (c *criService) RemoveContainer(ctx context.Context, req *runtime.RemoveContainerRequest) (*runtime.RemoveContainerResponse, error) {
+	return c.containerdCRI.RemoveContainer(ctx, req)
 }
 
 // ListContainers lists all containers by filters.
-func (c *criService) ListContainers(context.Context, *runtime.ListContainersRequest) (*runtime.ListContainersResponse, error) {
-	return &runtime.ListContainersResponse{}, nil
+func (c *criService) ListContainers(ctx context.Context, req *runtime.ListContainersRequest) (*runtime.ListContainersResponse, error) {
+	return c.containerdCRI.ListContainers(ctx, req)
 }
 
 // ContainerStatus returns status of the container. If the container is not
 // present, returns an error.
-func (c *criService) ContainerStatus(context.Context, *runtime.ContainerStatusRequest) (*runtime.ContainerStatusResponse, error) {
-	return &runtime.ContainerStatusResponse{}, nil
+func (c *criService) ContainerStatus(ctx context.Context, req *runtime.ContainerStatusRequest) (*runtime.ContainerStatusResponse, error) {
+	return c.containerdCRI.ContainerStatus(ctx, req)
 }
 
 // UpdateContainerResources updates ContainerConfig of the container.
-func (c *criService) UpdateContainerResources(context.Context, *runtime.UpdateContainerResourcesRequest) (*runtime.UpdateContainerResourcesResponse, error) {
-	return &runtime.UpdateContainerResourcesResponse{}, nil
+func (c *criService) UpdateContainerResources(ctx context.Context, req *runtime.UpdateContainerResourcesRequest) (*runtime.UpdateContainerResourcesResponse, error) {
+	return c.containerdCRI.UpdateContainerResources(ctx, req)
 }
 
 // ReopenContainerLog asks runtime to reopen the stdout/stderr log file
@@ -171,47 +171,47 @@ func (c *criService) UpdateContainerResources(context.Context, *runtime.UpdateCo
 // rotated. If the container is not running, container runtime can choose
 // to either create a new log file and return &runtime.{}, or return an error.
 // Once it returns error, new container log file MUST NOT be created.
-func (c *criService) ReopenContainerLog(context.Context, *runtime.ReopenContainerLogRequest) (*runtime.ReopenContainerLogResponse, error) {
-	return &runtime.ReopenContainerLogResponse{}, nil
+func (c *criService) ReopenContainerLog(ctx context.Context, req *runtime.ReopenContainerLogRequest) (*runtime.ReopenContainerLogResponse, error) {
+	return c.containerdCRI.ReopenContainerLog(ctx, req)
 }
 
 // ExecSync runs a command in a container synchronously.
-func (c *criService) ExecSync(context.Context, *runtime.ExecSyncRequest) (*runtime.ExecSyncResponse, error) {
-	return &runtime.ExecSyncResponse{}, nil
+func (c *criService) ExecSync(ctx context.Context, req *runtime.ExecSyncRequest) (*runtime.ExecSyncResponse, error) {
+	return c.containerdCRI.ExecSync(ctx, req)
 }
 
 // Exec prepares a streaming endpoint to execute a command in the container.
-func (c *criService) Exec(context.Context, *runtime.ExecRequest) (*runtime.ExecResponse, error) {
-	return &runtime.ExecResponse{}, nil
+func (c *criService) Exec(ctx context.Context, req *runtime.ExecRequest) (*runtime.ExecResponse, error) {
+	return c.containerdCRI.Exec(ctx, req)
 }
 
 // Attach prepares a streaming endpoint to attach to a running container.
-func (c *criService) Attach(context.Context, *runtime.AttachRequest) (*runtime.AttachResponse, error) {
-	return &runtime.AttachResponse{}, nil
+func (c *criService) Attach(ctx context.Context, req *runtime.AttachRequest) (*runtime.AttachResponse, error) {
+	return c.containerdCRI.Attach(ctx, req)
 }
 
 // PortForward prepares a streaming endpoint to forward ports from a PodSandbox.
-func (c *criService) PortForward(context.Context, *runtime.PortForwardRequest) (*runtime.PortForwardResponse, error) {
-	return &runtime.PortForwardResponse{}, nil
+func (c *criService) PortForward(ctx context.Context, req *runtime.PortForwardRequest) (*runtime.PortForwardResponse, error) {
+	return c.containerdCRI.PortForward(ctx, req)
 }
 
 // ContainerStats returns stats of the container. If the container does not
 // exist, the call returns an error.
-func (c *criService) ContainerStats(context.Context, *runtime.ContainerStatsRequest) (*runtime.ContainerStatsResponse, error) {
-	return &runtime.ContainerStatsResponse{}, nil
+func (c *criService) ContainerStats(ctx context.Context, req *runtime.ContainerStatsRequest) (*runtime.ContainerStatsResponse, error) {
+	return c.containerdCRI.ContainerStats(ctx, req)
 }
 
 // ListContainerStats returns stats of all running containers.
-func (c *criService) ListContainerStats(context.Context, *runtime.ListContainerStatsRequest) (*runtime.ListContainerStatsResponse, error) {
-	return &runtime.ListContainerStatsResponse{}, nil
+func (c *criService) ListContainerStats(ctx context.Context, req *runtime.ListContainerStatsRequest) (*runtime.ListContainerStatsResponse, error) {
+	return c.containerdCRI.ListContainerStats(ctx, req)
 }
 
 // UpdateRuntimeConfig updates the runtime configuration based on the given request.
-func (c *criService) UpdateRuntimeConfig(context.Context, *runtime.UpdateRuntimeConfigRequest) (*runtime.UpdateRuntimeConfigResponse, error) {
-	return &runtime.UpdateRuntimeConfigResponse{}, nil
+func (c *criService) UpdateRuntimeConfig(ctx context.Context, req *runtime.UpdateRuntimeConfigRequest) (*runtime.UpdateRuntimeConfigResponse, error) {
+	return c.containerdCRI.UpdateRuntimeConfig(ctx, req)
 }
 
 // Status returns the status of the runtime.
-func (c *criService) Status(context.Context, *runtime.StatusRequest) (*runtime.StatusResponse, error) {
-	return &runtime.StatusResponse{}, nil
+func (c *criService) Status(ctx context.Context, req *runtime.StatusRequest) (*runtime.StatusResponse, error) {
+	return c.containerdCRI.Status(ctx, req)
 }
