@@ -132,6 +132,7 @@ func (m *Worker) connectStdPipes() {
 	}()
 
 	go func() {
+		// Uncomment for debugging
 		// io.Copy(os.Stdout, stdoutRead)
 		outBuffer := bufio.NewReader(stdoutRead)
 
@@ -228,7 +229,7 @@ func (m *Worker) Start() error {
 		m.ctx,
 		m.ContainerID,
 		containerd.WithSnapshot(m.ContainerID),
-		containerd.WithNewSpec(WithNetNsHook(ipFileName), oci.WithProcessArgs(processArgs...), WithDefaultMemoryLimit),
+		containerd.WithNewSpec(WithNetNsHook(ipFileName), oci.WithProcessArgs(processArgs...), WithDefaultMemoryLimit, oci.WithDefaultPathEnv),
 	)
 	if err != nil {
 		return fmt.Errorf("could not create worker container: %s", err)

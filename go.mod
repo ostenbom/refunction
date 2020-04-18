@@ -8,7 +8,7 @@ require (
 	github.com/burntsushi/toml v0.3.1
 	github.com/containerd/cgroups v0.0.0-20200407151229-7fc7a507c04c // indirect
 	github.com/containerd/containerd v1.3.3
-	github.com/containerd/continuity v0.0.0-20200228182428-0f16d7a0959c // indirect
+	github.com/containerd/continuity v0.0.0-20200413184840-d3ef23f19fbb // indirect
 	github.com/containerd/cri v1.11.1-0.20200401132722-7013a825b0a7
 	github.com/containerd/fifo v0.0.0-20200410184934-f15a3290365b // indirect
 	github.com/containerd/go-cni v0.0.0-20200107172653-c154a49e2c75 // indirect
@@ -26,7 +26,7 @@ require (
 	github.com/go-kivik/couchdb v1.8.1
 	github.com/gogo/googleapis v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect
-	github.com/golang/protobuf v1.3.5 // indirect
+	github.com/golang/protobuf v1.4.0 // indirect
 	github.com/gopherjs/gopherjs v0.0.0-20190430165422-3e4dfb77656c // indirect
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/json-iterator/go v1.1.9 // indirect
@@ -44,10 +44,10 @@ require (
 	golang.org/x/net v0.0.0-20200324143707-d3edc9973b7e // indirect
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d // indirect
 	golang.org/x/sync v0.0.0-20200317015054-43a5402ce75a // indirect
-	golang.org/x/sys v0.0.0-20200409092240-59c9f1ba88fa
+	golang.org/x/sys v0.0.0-20200413165638-669c56c373c4
 	golang.org/x/time v0.0.0-20191024005414-555d28b269f0 // indirect
 	google.golang.org/appengine v1.6.5 // indirect
-	google.golang.org/genproto v0.0.0-20200410110633-0848e9f44c36 // indirect
+	google.golang.org/genproto v0.0.0-20200417142217-fb6d0575620b // indirect
 	google.golang.org/grpc v1.28.1
 	gopkg.in/square/go-jose.v2 v2.5.0 // indirect
 	gotest.tools/v3 v3.0.2 // indirect

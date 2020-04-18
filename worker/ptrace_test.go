@@ -295,5 +295,5 @@ func getPidState(pid int) string {
 }
 
 func getRootfs(manager *Worker) string {
-	return fmt.Sprintf("%s/io.containerd.runtime.v1.linux/refunction-worker%s/%s/rootfs/", config.State, manager.ID, manager.ContainerID)
+	return fmt.Sprintf("%s/io.containerd.runtime.v2.task/refunction-worker%s/%s/rootfs/", config.State, manager.ID, manager.ContainerID)
 }
