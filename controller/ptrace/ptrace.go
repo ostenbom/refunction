@@ -6,7 +6,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/ostenbom/refunction/worker/safewriter"
+	"github.com/ostenbom/refunction/controller/safewriter"
 	sec "github.com/seccomp/libseccomp-golang"
 	log "github.com/sirupsen/logrus"
 )
@@ -29,7 +29,13 @@ type TraceTask struct {
 	writer         *safewriter.SafeWriter
 }
 
-func NewTraceTask(tid int, gid int, attachOptions []int, straceEnabled bool, writer *safewriter.SafeWriter) (*TraceTask, error) {
+type Options struct {
+	AttachOptions []int
+	StraceEnabled bool
+	StraceOutput  *safewriter.SafeWriter
+}
+
+func NewTraceTask(tid int, gid int, options Options) (*TraceTask, error) {
 	task := &TraceTask{
 		Tid:            tid,
 		Gid:            gid,
@@ -43,9 +49,9 @@ func NewTraceTask(tid int, gid int, attachOptions []int, straceEnabled bool, wri
 		SyscallError:   make(chan error),
 		InStopFunction: make(chan func(*TraceTask)),
 		Error:          make(chan error),
-		attachOptions:  attachOptions,
-		straceEnabled:  straceEnabled,
-		writer:         writer,
+		attachOptions:  options.AttachOptions,
+		straceEnabled:  options.StraceEnabled,
+		writer:         options.StraceOutput,
 	}
 
 	err := task.ptraceLoop()
@@ -54,6 +60,7 @@ func NewTraceTask(tid int, gid int, attachOptions []int, straceEnabled bool, wri
 	}
 
 	task.awaitPtraceError()
+
 	return task, nil
 }
 

@@ -1,18 +1,14 @@
 package worker
 
 import (
-	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"math/rand"
 	"net"
 	"os"
-	"strconv"
 	"syscall"
-	"time"
 
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/cio"
@@ -21,17 +17,9 @@ import (
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/oci"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
-	"github.com/ostenbom/refunction/worker/ptrace"
-	"github.com/ostenbom/refunction/worker/safewriter"
-	. "github.com/ostenbom/refunction/worker/state"
-	log "github.com/sirupsen/logrus"
+	"github.com/ostenbom/refunction/controller"
+	. "github.com/ostenbom/refunction/state"
 )
-
-type Streams struct {
-	Stdin  *io.PipeWriter
-	Stdout *io.PipeReader
-	Stderr *io.PipeReader
-}
 
 func NewWorker(id string, client *containerd.Client, runtime, targetSnapshot string) (*Worker, error) {
 	ctx := namespaces.WithNamespace(context.Background(), "refunction-worker"+id)
@@ -53,15 +41,13 @@ func NewWorkerWithSnapManager(id string, client *containerd.Client, runtime, tar
 
 	return &Worker{
 		ID:             id,
+		controller:     controller.NewController(),
 		targetSnapshot: targetSnapshot,
 		runtime:        runtime,
-		messages:       make(chan Message, 1),
 		client:         client,
 		ctx:            ctx,
 		creator:        cio.NullIO,
 		snapManager:    snapManager,
-		traceTasks:     make(map[int]*ptrace.TraceTask),
-		straceEnabled:  false,
 	}, nil
 }
 
@@ -70,8 +56,7 @@ type Worker struct {
 	ContainerID    string
 	targetSnapshot string
 	runtime        string
-	streams        *Streams
-	messages       chan Message
+	controller     *controller.Controller
 	stderrWriters  []io.Writer
 	stdoutWriters  []io.Writer
 	client         *containerd.Client
@@ -81,18 +66,7 @@ type Worker struct {
 	container      containerd.Container
 	task           containerd.Task
 	taskExitChan   <-chan containerd.ExitStatus
-	checkpoints    []*State
-	attached       bool
-	attachOptions  []int
-	traceTasks     map[int]*ptrace.TraceTask
-	straceEnabled  bool
-	straceOutput   *safewriter.SafeWriter
 	IP             net.IP
-}
-
-type Message struct {
-	Type string      `json:"type"`
-	Data interface{} `json:"data"`
 }
 
 func (m *Worker) WithStdPipes(stderrWriter io.Writer, stdoutWriters ...io.Writer) {
@@ -121,53 +95,15 @@ func (m *Worker) connectStdPipes() {
 
 	m.creator = cio.NewCreator(cio.WithStreams(stdinRead, collectedStdOut, collectedStdErr))
 
-	m.streams = &Streams{
-		Stdin:  stdinWrite,
-		Stdout: stdoutRead,
-		Stderr: stderrRead,
-	}
+	m.controller.SetStreams(stdinWrite, stdoutRead, stderrRead)
 
 	go func() {
 		io.Copy(os.Stderr, stderrRead)
 	}()
-
-	go func() {
-		// Uncomment for debugging
-		// io.Copy(os.Stdout, stdoutRead)
-		outBuffer := bufio.NewReader(stdoutRead)
-
-		for {
-			line, err := outBuffer.ReadString('\n')
-			if err != nil {
-				return
-			}
-
-			var message Message
-			err = json.Unmarshal([]byte(line), &message)
-			if err != nil {
-				log.Debug(line)
-				continue
-			}
-
-			dataString, ok := message.Data.(string)
-			if ok {
-				log.Debug(dataString)
-			}
-
-			if message.Type == "info" || message.Type == "log" {
-				// Ignore these for now
-				// log.Debug(message.Data)
-			} else {
-				m.messages <- message
-			}
-		}
-	}()
 }
 
 func (m *Worker) WithSyscallTrace(to io.Writer) {
-	m.straceEnabled = true
-	m.attachOptions = append(m.attachOptions, syscall.PTRACE_O_TRACESYSGOOD)
-	m.straceOutput = safewriter.NewSafeWriter(to)
+	m.controller.WithSyscallTrace(to)
 }
 
 func WithNetNsHook(ipFile string) oci.SpecOpts {
@@ -262,337 +198,97 @@ func (m *Worker) Start() error {
 	// fmt.Println(string(ipBytes))
 	m.IP = net.ParseIP(string(ipBytes))
 
-	m.attached = false
+	m.controller.SetPid(int(m.task.Pid()))
 
 	return nil
 }
 
 func (m *Worker) Activate() error {
-	m.AwaitMessage("started")
-	m.Attach()
-
-	err := m.TakeCheckpoint()
-	if err != nil {
-		return fmt.Errorf("could not take activation checkpoint: %s", err)
-	}
-
-	return nil
+	return m.controller.Activate()
 }
 
 func (m *Worker) Attach() error {
-	taskDirs, err := ioutil.ReadDir(fmt.Sprintf("/proc/%d/task", m.task.Pid()))
-	if err != nil {
-		return fmt.Errorf("could not read task entries: %s", err)
-	}
-
-	for _, t := range taskDirs {
-		tid, err := strconv.Atoi(t.Name())
-		if err != nil {
-			return fmt.Errorf("tid was not int: %s", err)
-		}
-		task, err := ptrace.NewTraceTask(tid, m.Pid(), m.attachOptions, m.straceEnabled, m.straceOutput)
-		if err != nil {
-			return fmt.Errorf("could not create trace task %d: %s", tid, err)
-		}
-		m.traceTasks[tid] = task
-	}
-
-	m.attached = true
-	return nil
+	return m.controller.Attach()
 }
 
 func (m *Worker) TakeCheckpoint() error {
-	err := m.Stop()
-	if err != nil {
-		return fmt.Errorf("could not stop for checkpoint")
-	}
-
-	checkStart := time.Now()
-
-	state, err := m.GetState()
-	if err != nil {
-		return err
-	}
-
-	err = state.SaveWritablePages()
-	if err != nil {
-		return err
-	}
-	err = m.ClearMemRefs()
-	if err != nil {
-		return err
-	}
-	m.checkpoints = append(m.checkpoints, state)
-
-	fmt.Printf("checkpoint time: %s", time.Since(checkStart))
-
-	m.Continue()
-	return nil
+	return m.controller.TakeCheckpoint()
 }
 
 func (m *Worker) GetCheckpoints() []*State {
-	return m.checkpoints
+	return m.controller.GetCheckpoints()
 }
 
 func (m *Worker) SendFunction(function string) error {
-	functionReq := &Message{Type: "function", Data: function}
-	functionReqString, err := json.Marshal(functionReq)
-	if err != nil {
-		return err
-	}
-	newLineReq := append(functionReqString, []byte("\n")...)
-	_, err = m.streams.Stdin.Write(newLineReq)
-	if err != nil {
-		return fmt.Errorf("could not write to worker stdin: %s", err)
-	}
-
-	loadedMessage := m.AwaitMessage("function_loaded")
-	success, ok := loadedMessage.Data.(bool)
-	if !ok || !success {
-		return fmt.Errorf("function failed to load")
-	}
-	return nil
+	return m.controller.SendFunction(function)
 }
 
 func (m *Worker) SendRequest(request interface{}) (interface{}, error) {
-	functionReq := &Message{Type: "request", Data: request}
-	functionReqString, err := json.Marshal(functionReq)
-	if err != nil {
-		return "", err
-	}
-	newLineReq := append(functionReqString, []byte("\n")...)
-	_, err = m.streams.Stdin.Write(newLineReq)
-	if err != nil {
-		return "", err
-	}
-
-	message := m.AwaitMessage("response")
-	return message.Data, nil
+	return m.controller.SendRequest(request)
 }
 
-func (m *Worker) AwaitMessage(messageType string) Message {
-	for {
-		message := <-m.messages
-		if message.Type == messageType {
-			return message
-		}
-	}
+func (m *Worker) AwaitMessage(messageType string) controller.Message {
+	return m.controller.AwaitMessage(messageType)
 }
 
-// SendMessage writes a message to the containers stdin
 func (m *Worker) SendMessage(messageType string, data interface{}) error {
-	message := &Message{Type: messageType, Data: data}
-	messageString, err := json.Marshal(message)
-	if err != nil {
-		return err
-	}
-	newLineReq := append(messageString, []byte("\n")...)
-	_, err = m.streams.Stdin.Write(newLineReq)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return m.controller.SendMessage(messageType, data)
 }
 
-// AwaitSignal lets the process continue until the desired signal is caught.
-// Allows the process to continue after the signal is caught
 func (m *Worker) AwaitSignal(waitingFor syscall.Signal) {
-	var waitStat syscall.WaitStatus
-	for waitStat.StopSignal() != waitingFor {
-		waitStat = <-m.traceTasks[m.Pid()].SignalStop
-		m.ContinueWith(waitStat.StopSignal())
-	}
-
-	return
+	m.controller.AwaitSignal(waitingFor)
 }
 
-// PauseAtSignal waits until the desired signal is caught and returns
-// before continuing
 func (m *Worker) PauseAtSignal(waitingFor syscall.Signal) {
-	var waitStat syscall.WaitStatus
-	waitStat = <-m.traceTasks[m.Pid()].SignalStop
-
-	for waitStat.StopSignal() != waitingFor {
-		m.ContinueWith(waitStat.StopSignal())
-		waitStat = <-m.traceTasks[m.Pid()].SignalStop
-	}
-
-	m.traceTasks[m.Pid()].SignalStop <- waitStat
-	return
+	m.controller.PauseAtSignal(waitingFor)
 }
 
-// Restore returns process state to first checkpoint
-// Restore takes responsibility for stopping tasks
 func (m *Worker) Restore() error {
-	err := m.Stop()
-	if err != nil {
-		return fmt.Errorf("could not stop worker for restore: %s", err)
-	}
-
-	if len(m.checkpoints) <= 0 {
-		return fmt.Errorf("no checkpoints to restore")
-	}
-
-	state := m.checkpoints[0]
-
-	start := time.Now()
-
-	fixup := false
-	changed, err := state.ProgramBreakChanged()
-	if err != nil {
-		return fmt.Errorf("could not check program break on restore: %s", err)
-	}
-	if changed {
-		fixup = true
-		err := state.RestoreProgramBreak()
-		if err != nil {
-			return fmt.Errorf("count not restore program break: %s", err)
-		}
-	}
-
-	changed, err = state.NumMemoryLocationsChanged()
-	if err != nil {
-		return fmt.Errorf("could not check num mem locations changed on restore: %s", err)
-	}
-	if changed {
-		fixup = true
-		err := state.UnmapNewLocations()
-		if err != nil {
-			return fmt.Errorf("count not unmap new locations: %s", err)
-		}
-	}
-
-	if fixup {
-		err := state.FixupSyscallState()
-		if err != nil {
-			return fmt.Errorf("count not fixup syscall state: %s", err)
-		}
-	}
-
-	err = state.RestoreDirtyPages()
-	if err != nil {
-		return fmt.Errorf("could not restore stack: %s", err)
-	}
-	err = state.RestoreRegs()
-	if err != nil {
-		return fmt.Errorf("could not restore regs: %s", err)
-	}
-
-	fmt.Printf("restore time: %s", time.Since(start))
-
-	m.Continue()
-
-	return nil
+	return m.controller.Restore()
 }
 
-// Detach 'es all tasks from ptrace supervision
-// For PTRACE_DETACH to on a task, it must be in a ptrace-stop state
-// Tgkilling the task and supressing injection on detach is a good way to
-// do this.
 func (m *Worker) Detach() error {
-	for _, task := range m.traceTasks {
-		// Ensure the task is stopped
-		err := task.Stop()
-		if err != nil {
-			return fmt.Errorf("could not stop child for detach: %s", err)
-		}
-
-		task.Detach <- 1
-		<-task.HasDetached
-	}
-	m.attached = false
-	return nil
+	return m.controller.Detach()
 }
 
 func (m *Worker) Stop() error {
-	for _, t := range m.traceTasks {
-		err := t.Stop()
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	return m.controller.Stop()
 }
 
 func (m *Worker) Continue() {
-	m.ContinueWith(0)
+	m.controller.ContinueWith(0)
 }
 
 func (m *Worker) ContinueWith(signal syscall.Signal) {
-	for tid := range m.traceTasks {
-		m.ContinueTid(tid, signal)
-	}
+	m.controller.ContinueWith(signal)
 }
 
 func (m *Worker) ContinueTid(tid int, signal syscall.Signal) {
-	m.traceTasks[tid].Continue <- signal
-	<-m.traceTasks[tid].HasContinued
+	m.controller.ContinueTid(tid, signal)
 }
 
 func (m *Worker) SendSignalCont(signal syscall.Signal) error {
-	err := m.SendSignal(signal)
-	if err != nil {
-		return err
-	}
-
-	// If not attached, signal will go through
-	if !m.attached {
-		return nil
-	}
-
-	<-m.traceTasks[m.Pid()].SignalStop
-	m.ContinueWith(signal)
-	return nil
+	return m.controller.SendSignalCont(signal)
 }
 
 func (m *Worker) SendSignal(signal syscall.Signal) error {
-	pid := m.Pid()
-	return syscall.Tgkill(pid, pid, signal)
+	return m.controller.SendSignal(signal)
 }
 
-// GetState creates a new instance of the process state.
-// Caller must ensure tasks are stopped
 func (m *Worker) GetState() (*State, error) {
-	state, err := NewState(m.Pid(), m.traceTasks)
-	if err != nil {
-		return nil, fmt.Errorf("could not get state: %s", err)
-	}
-
-	return state, nil
+	return m.controller.GetState()
 }
 
 func (m *Worker) GetInitialCheckpoint() (*State, error) {
-	if len(m.checkpoints) == 0 {
-		return nil, fmt.Errorf("no initial checkpoint")
-	}
-	return m.checkpoints[0], nil
+	return m.controller.GetInitialCheckpoint()
 }
 
-// SetRegs returns registers to their values in state
-// Caller must ensure tasks are stopped
 func (m *Worker) SetRegs(state *State) error {
-	err := state.RestoreRegs()
-	if err != nil {
-		return fmt.Errorf("could not set regs: %s", err)
-	}
-
-	return nil
+	return m.controller.SetRegs(state)
 }
 
 func (m *Worker) ClearMemRefs() error {
-	pid := m.Pid()
-	f, err := os.OpenFile(fmt.Sprintf("/proc/%d/clear_refs", pid), os.O_WRONLY, 0)
-	if err != nil {
-		return fmt.Errorf("could not open clear_refs for pid %d: %s", pid, err)
-	}
-	defer f.Close()
-
-	_, err = f.WriteString("4")
-	if err != nil {
-		return fmt.Errorf("could not clear_refs for pid %d: %s", pid, err)
-	}
-	return nil
+	return m.controller.ClearMemRefs()
 }
 
 func (m *Worker) GetImage(name string) (containerd.Image, error) {
@@ -608,16 +304,10 @@ func (m *Worker) Pid() int {
 }
 
 func (m *Worker) End() error {
-	var detachErr error
+	var controllerErr error
 	if m.task != nil {
-		if m.attached {
-			detachErr = m.Detach()
-		}
-		if m.streams != nil {
-			m.streams.Stdin.Close()
-			m.streams.Stdout.Close()
-			m.streams.Stderr.Close()
-		}
+		controllerErr = m.controller.End()
+
 		if err := m.task.Kill(m.ctx, syscall.SIGKILL, containerd.WithKillAll); err != nil {
 			if errdefs.IsFailedPrecondition(err) || errdefs.IsNotFound(err) {
 				return nil
@@ -637,8 +327,8 @@ func (m *Worker) End() error {
 		m.container.Delete(m.ctx, containerd.WithSnapshotCleanup)
 	}
 
-	if detachErr != nil {
-		return fmt.Errorf("could not detach on end: %s", detachErr)
+	if controllerErr != nil {
+		fmt.Errorf("controller failed to end: %s", controllerErr)
 	}
 
 	return nil

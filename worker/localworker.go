@@ -9,7 +9,6 @@ import (
 	"github.com/containerd/containerd/cio"
 	"github.com/containerd/containerd/namespaces"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
-	"github.com/ostenbom/refunction/worker/ptrace"
 )
 
 func NewLocalWorker(id string, pid uint32) *Worker {
@@ -24,8 +23,6 @@ func NewLocalWorker(id string, pid uint32) *Worker {
 			id:  id,
 			pid: pid,
 		},
-		traceTasks:    make(map[int]*ptrace.TraceTask),
-		straceEnabled: false,
 	}
 }
 

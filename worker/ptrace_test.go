@@ -179,7 +179,7 @@ var _ = Describe("Worker Manager using c-sigusr-sleep image", func() {
 			pid := worker.Pid()
 			Expect(err).NotTo(HaveOccurred())
 
-			worker.SendSignal(syscall.SIGSTOP)
+			Expect(worker.SendSignal(syscall.SIGSTOP)).To(Succeed())
 			// worker.PauseAtSignal(syscall.SIGSTOP)
 			processState := getPidState(pid)
 

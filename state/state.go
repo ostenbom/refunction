@@ -5,7 +5,7 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/ostenbom/refunction/worker/ptrace"
+	"github.com/ostenbom/refunction/controller/ptrace"
 )
 
 type TaskRegState struct {
