@@ -56,7 +56,7 @@ type Worker struct {
 	ContainerID    string
 	targetSnapshot string
 	runtime        string
-	controller     *controller.Controller
+	controller     controller.Controller
 	stderrWriters  []io.Writer
 	stdoutWriters  []io.Writer
 	client         *containerd.Client

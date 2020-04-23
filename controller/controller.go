@@ -18,6 +18,44 @@ import (
 	"github.com/prometheus/common/log"
 )
 
+//go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 . Controller
+
+type Controller interface {
+	WithSyscallTrace(io.Writer)
+	SetStreams(*io.PipeWriter, *io.PipeReader, *io.PipeReader)
+	SetPid(int)
+
+	Activate() error
+	Attach() error
+	Detach() error
+	End() error
+	Restore() error
+
+	TakeCheckpoint() error
+	GetInitialCheckpoint() (*state.State, error)
+	GetCheckpoints() []*state.State
+	GetState() (*state.State, error)
+
+	SendFunction(function string) error
+	SendRequest(request interface{}) (interface{}, error)
+
+	AwaitMessage(messageType string) Message
+	SendMessage(messageType string, data interface{}) error
+
+	AwaitSignal(waitingFor syscall.Signal)
+	PauseAtSignal(waitingFor syscall.Signal)
+
+	Continue()
+	ContinueWith(signal syscall.Signal)
+	ContinueTid(tid int, signal syscall.Signal)
+	SendSignalCont(signal syscall.Signal) error
+	SendSignal(signal syscall.Signal) error
+
+	Stop() error
+	SetRegs(state *state.State) error
+	ClearMemRefs() error
+}
+
 type Message struct {
 	Type string      `json:"type"`
 	Data interface{} `json:"data"`
@@ -29,7 +67,7 @@ type Streams struct {
 	Stderr *io.PipeReader
 }
 
-type Controller struct {
+type controller struct {
 	pid           int
 	messages      chan Message
 	streams       *Streams
@@ -39,8 +77,8 @@ type Controller struct {
 	ptraceOptions ptrace.Options
 }
 
-func NewController() *Controller {
-	return &Controller{
+func NewController() Controller {
+	return &controller{
 		attached:   false,
 		messages:   make(chan Message, 1),
 		traceTasks: make(map[int]*ptrace.TraceTask),
@@ -50,13 +88,13 @@ func NewController() *Controller {
 	}
 }
 
-func (c *Controller) WithSyscallTrace(to io.Writer) {
+func (c *controller) WithSyscallTrace(to io.Writer) {
 	c.ptraceOptions.StraceEnabled = true
 	c.ptraceOptions.AttachOptions = append(c.ptraceOptions.AttachOptions, syscall.PTRACE_O_TRACESYSGOOD)
 	c.ptraceOptions.StraceOutput = safewriter.NewSafeWriter(to)
 }
 
-func (c *Controller) SetStreams(in *io.PipeWriter, out *io.PipeReader, err *io.PipeReader) {
+func (c *controller) SetStreams(in *io.PipeWriter, out *io.PipeReader, err *io.PipeReader) {
 	c.streams = &Streams{
 		Stdin:  in,
 		Stdout: out,
@@ -96,11 +134,11 @@ func (c *Controller) SetStreams(in *io.PipeWriter, out *io.PipeReader, err *io.P
 	}()
 }
 
-func (c *Controller) SetPid(pid int) {
+func (c *controller) SetPid(pid int) {
 	c.pid = pid
 }
 
-func (c *Controller) Activate() error {
+func (c *controller) Activate() error {
 	if c.streams == nil {
 		return errors.New("controller has no in/out streams")
 	}
@@ -120,7 +158,7 @@ func (c *Controller) Activate() error {
 	return nil
 }
 
-func (c *Controller) Attach() error {
+func (c *controller) Attach() error {
 	if c.pid == 0 {
 		return errors.New("controller has no pid")
 	}
@@ -148,7 +186,7 @@ func (c *Controller) Attach() error {
 	return nil
 }
 
-func (c *Controller) TakeCheckpoint() error {
+func (c *controller) TakeCheckpoint() error {
 	err := c.Stop()
 	if err != nil {
 		return fmt.Errorf("could not stop for checkpoint")
@@ -177,11 +215,11 @@ func (c *Controller) TakeCheckpoint() error {
 	return nil
 }
 
-func (c *Controller) GetCheckpoints() []*state.State {
+func (c *controller) GetCheckpoints() []*state.State {
 	return c.checkpoints
 }
 
-func (c *Controller) SendFunction(function string) error {
+func (c *controller) SendFunction(function string) error {
 	functionReq := &Message{Type: "function", Data: function}
 
 	functionReqString, err := json.Marshal(functionReq)
@@ -204,7 +242,7 @@ func (c *Controller) SendFunction(function string) error {
 	return nil
 }
 
-func (c *Controller) SendRequest(request interface{}) (interface{}, error) {
+func (c *controller) SendRequest(request interface{}) (interface{}, error) {
 	functionReq := &Message{Type: "request", Data: request}
 	functionReqString, err := json.Marshal(functionReq)
 	if err != nil {
@@ -220,7 +258,7 @@ func (c *Controller) SendRequest(request interface{}) (interface{}, error) {
 	return message.Data, nil
 }
 
-func (c *Controller) AwaitMessage(messageType string) Message {
+func (c *controller) AwaitMessage(messageType string) Message {
 	for {
 		message := <-c.messages
 		if message.Type == messageType {
@@ -230,7 +268,7 @@ func (c *Controller) AwaitMessage(messageType string) Message {
 }
 
 // SendMessage writes a message to the containers stdin
-func (c *Controller) SendMessage(messageType string, data interface{}) error {
+func (c *controller) SendMessage(messageType string, data interface{}) error {
 	message := &Message{Type: messageType, Data: data}
 	messageString, err := json.Marshal(message)
 	if err != nil {
@@ -247,7 +285,7 @@ func (c *Controller) SendMessage(messageType string, data interface{}) error {
 
 // AwaitSignal lets the process continue until the desired signal is caught.
 // Allows the process to continue after the signal is caught
-func (c *Controller) AwaitSignal(waitingFor syscall.Signal) {
+func (c *controller) AwaitSignal(waitingFor syscall.Signal) {
 	var waitStat syscall.WaitStatus
 	for waitStat.StopSignal() != waitingFor {
 		waitStat = <-c.traceTasks[c.pid].SignalStop
@@ -257,7 +295,7 @@ func (c *Controller) AwaitSignal(waitingFor syscall.Signal) {
 
 // PauseAtSignal waits until the desired signal is caught and returns
 // before continuing
-func (c *Controller) PauseAtSignal(waitingFor syscall.Signal) {
+func (c *controller) PauseAtSignal(waitingFor syscall.Signal) {
 	var waitStat syscall.WaitStatus
 	waitStat = <-c.traceTasks[c.pid].SignalStop
 
@@ -271,7 +309,7 @@ func (c *Controller) PauseAtSignal(waitingFor syscall.Signal) {
 
 // Restore returns process state to first checkpoint
 // Restore takes responsibility for stopping tasks
-func (c *Controller) Restore() error {
+func (c *controller) Restore() error {
 	err := c.Stop()
 	if err != nil {
 		return fmt.Errorf("could not stop worker for restore: %s", err)
@@ -336,7 +374,7 @@ func (c *Controller) Restore() error {
 // For PTRACE_DETACH to on a task, it must be in a ptrace-stop state
 // Tgkilling the task and supressing injection on detach is a good way to
 // do this.
-func (c *Controller) Detach() error {
+func (c *controller) Detach() error {
 	for _, task := range c.traceTasks {
 		// Ensure the task is stopped
 		err := task.Stop()
@@ -353,7 +391,7 @@ func (c *Controller) Detach() error {
 	return nil
 }
 
-func (c *Controller) Stop() error {
+func (c *controller) Stop() error {
 	for _, t := range c.traceTasks {
 		err := t.Stop()
 		if err != nil {
@@ -363,22 +401,22 @@ func (c *Controller) Stop() error {
 	return nil
 }
 
-func (c *Controller) Continue() {
+func (c *controller) Continue() {
 	c.ContinueWith(0)
 }
 
-func (c *Controller) ContinueWith(signal syscall.Signal) {
+func (c *controller) ContinueWith(signal syscall.Signal) {
 	for tid := range c.traceTasks {
 		c.ContinueTid(tid, signal)
 	}
 }
 
-func (c *Controller) ContinueTid(tid int, signal syscall.Signal) {
+func (c *controller) ContinueTid(tid int, signal syscall.Signal) {
 	c.traceTasks[tid].Continue <- signal
 	<-c.traceTasks[tid].HasContinued
 }
 
-func (c *Controller) SendSignalCont(signal syscall.Signal) error {
+func (c *controller) SendSignalCont(signal syscall.Signal) error {
 	err := c.SendSignal(signal)
 	if err != nil {
 		return err
@@ -394,14 +432,14 @@ func (c *Controller) SendSignalCont(signal syscall.Signal) error {
 	return nil
 }
 
-func (c *Controller) SendSignal(signal syscall.Signal) error {
+func (c *controller) SendSignal(signal syscall.Signal) error {
 	pid := c.pid
 	return syscall.Tgkill(pid, pid, signal)
 }
 
 // GetState creates a new instance of the process state.
 // Caller must ensure tasks are stopped
-func (c *Controller) GetState() (*state.State, error) {
+func (c *controller) GetState() (*state.State, error) {
 	state, err := state.NewState(c.pid, c.traceTasks)
 	if err != nil {
 		return nil, fmt.Errorf("could not get state: %s", err)
@@ -410,7 +448,7 @@ func (c *Controller) GetState() (*state.State, error) {
 	return state, nil
 }
 
-func (c *Controller) GetInitialCheckpoint() (*state.State, error) {
+func (c *controller) GetInitialCheckpoint() (*state.State, error) {
 	if len(c.checkpoints) == 0 {
 		return nil, fmt.Errorf("no initial checkpoint")
 	}
@@ -419,7 +457,7 @@ func (c *Controller) GetInitialCheckpoint() (*state.State, error) {
 
 // SetRegs returns registers to their values in state
 // Caller must ensure tasks are stopped
-func (c *Controller) SetRegs(state *state.State) error {
+func (c *controller) SetRegs(state *state.State) error {
 	err := state.RestoreRegs()
 	if err != nil {
 		return fmt.Errorf("could not set regs: %s", err)
@@ -428,7 +466,7 @@ func (c *Controller) SetRegs(state *state.State) error {
 	return nil
 }
 
-func (c *Controller) ClearMemRefs() error {
+func (c *controller) ClearMemRefs() error {
 	pid := c.pid
 	f, err := os.OpenFile(fmt.Sprintf("/proc/%d/clear_refs", pid), os.O_WRONLY, 0)
 	if err != nil {
@@ -443,7 +481,7 @@ func (c *Controller) ClearMemRefs() error {
 	return nil
 }
 
-func (c *Controller) End() error {
+func (c *controller) End() error {
 	var detachErr error
 	if c.attached {
 		detachErr = c.Detach()

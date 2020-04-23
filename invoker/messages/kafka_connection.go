@@ -6,8 +6,7 @@ import (
 	"github.com/ostenbom/kafka-go"
 )
 
-//go:generate gobin -m -run github.com/maxbrunsfeld/counterfeiter/v6 . KafkaConnection
-
+//go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 . KafkaConnection
 type KafkaConnection interface {
 	CreateTopics(...kafka.TopicConfig) error
 	Close() error

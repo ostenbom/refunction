@@ -8,7 +8,7 @@ import (
 )
 
 var _ = Describe("Controller", func() {
-	var c *Controller
+	var c Controller
 	BeforeEach(func() {
 		c = NewController()
 	})

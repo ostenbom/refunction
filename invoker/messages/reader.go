@@ -10,7 +10,7 @@ import (
 const defaultMinBytes = 10
 const defaultMaxBytes = 10e5 // 1MB
 
-//go:generate gobin -m -run github.com/maxbrunsfeld/counterfeiter/v6 . Reader
+//go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 . Reader
 
 type Reader interface {
 	ReadMessage(context.Context) (kafka.Message, error)

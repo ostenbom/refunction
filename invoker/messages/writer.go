@@ -6,7 +6,7 @@ import (
 	"github.com/ostenbom/kafka-go"
 )
 
-//go:generate gobin -m -run github.com/maxbrunsfeld/counterfeiter/v6 . Writer
+//go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 . Writer
 
 type Writer interface {
 	WriteMessages(context.Context, ...kafka.Message) error

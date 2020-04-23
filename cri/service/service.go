@@ -27,6 +27,7 @@ type CRIService interface {
 }
 
 //go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 . ContainerdCRIService
+
 type ContainerdCRIService interface {
 	containerdCRIserver.CRIService
 }
