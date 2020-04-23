@@ -18,12 +18,11 @@ import (
 	"github.com/prometheus/common/log"
 )
 
-//go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 . Controller
-
 type Controller interface {
 	WithSyscallTrace(io.Writer)
 	SetStreams(*io.PipeWriter, *io.PipeReader, *io.PipeReader)
 	SetPid(int)
+	GetPid() int
 
 	Activate() error
 	Attach() error
@@ -136,6 +135,10 @@ func (c *controller) SetStreams(in *io.PipeWriter, out *io.PipeReader, err *io.P
 
 func (c *controller) SetPid(pid int) {
 	c.pid = pid
+}
+
+func (c *controller) GetPid() int {
+	return c.pid
 }
 
 func (c *controller) Activate() error {

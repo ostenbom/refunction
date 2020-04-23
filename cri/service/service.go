@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 	"github.com/containerd/containerd"
 	containerdCRIconfig "github.com/containerd/cri/pkg/config"
 	containerdCRIserver "github.com/containerd/cri/pkg/server"
+	"github.com/ostenbom/refunction/controller"
 	"google.golang.org/grpc"
 	runtime "k8s.io/cri-api/pkg/apis/runtime/v1alpha2"
 )
@@ -24,6 +26,7 @@ type CRIService interface {
 	runtime.RuntimeServiceServer
 	runtime.ImageServiceServer
 	Register(*grpc.Server)
+	GetController(string) (controller.Controller, error)
 }
 
 //go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 . ContainerdCRIService
@@ -35,6 +38,11 @@ type ContainerdCRIService interface {
 type criService struct {
 	client        *containerd.Client
 	containerdCRI ContainerdCRIService
+	controllers   map[string]controller.Controller
+}
+
+type ContainerInfo struct {
+	Pid int `json:"pid"`
 }
 
 func NewCRIService(client *containerd.Client) (CRIService, error) {
@@ -65,6 +73,7 @@ func NewCRIService(client *containerd.Client) (CRIService, error) {
 	c := &criService{
 		client:        client,
 		containerdCRI: containerdCRI,
+		controllers:   make(map[string]controller.Controller),
 	}
 
 	return c, nil
@@ -74,6 +83,7 @@ func NewFakeCRIService(containerdCRI ContainerdCRIService) CRIService {
 	c := &criService{
 		client:        &containerd.Client{},
 		containerdCRI: containerdCRI,
+		controllers:   make(map[string]controller.Controller),
 	}
 
 	return c
@@ -82,6 +92,16 @@ func NewFakeCRIService(containerdCRI ContainerdCRIService) CRIService {
 func (c *criService) Register(s *grpc.Server) {
 	runtime.RegisterRuntimeServiceServer(s, c)
 	runtime.RegisterImageServiceServer(s, c)
+}
+
+func (c *criService) GetController(id string) (controller.Controller, error) {
+	controller, exists := c.controllers[id]
+
+	if !exists {
+		return nil, fmt.Errorf("no such controller for id: %s", id)
+	}
+
+	return controller, nil
 }
 
 // Version returns the runtime name, runtime version, and runtime API version.
@@ -134,12 +154,53 @@ func (c *criService) ListPodSandbox(ctx context.Context, req *runtime.ListPodSan
 
 // CreateContainer creates a new container in specified PodSandbox
 func (c *criService) CreateContainer(ctx context.Context, req *runtime.CreateContainerRequest) (*runtime.CreateContainerResponse, error) {
-	return c.containerdCRI.CreateContainer(ctx, req)
+	createResponse, err := c.containerdCRI.CreateContainer(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	_, isRefunctionPod := req.GetSandboxConfig().GetAnnotations()["refunction"]
+	if isRefunctionPod {
+		c.controllers[createResponse.GetContainerId()] = controller.NewController()
+	}
+
+	return createResponse, nil
 }
 
 // StartContainer starts the container.
 func (c *criService) StartContainer(ctx context.Context, req *runtime.StartContainerRequest) (*runtime.StartContainerResponse, error) {
-	return c.containerdCRI.StartContainer(ctx, req)
+	startResp, err := c.containerdCRI.StartContainer(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	_, isRefunctionContainer := c.controllers[req.GetContainerId()]
+	if !isRefunctionContainer {
+		return startResp, nil
+	}
+
+	statusReq := &runtime.ContainerStatusRequest{
+		ContainerId: req.GetContainerId(),
+		Verbose:     true,
+	}
+
+	statusResp, err := c.containerdCRI.ContainerStatus(ctx, statusReq)
+	if err != nil {
+		return nil, fmt.Errorf("started container status error: %s", err)
+	}
+
+	var info ContainerInfo
+
+	infoString := statusResp.GetInfo()["info"]
+
+	err = json.Unmarshal([]byte(infoString), &info)
+	if err != nil {
+		return nil, fmt.Errorf("could not parse container info: %s", err)
+	}
+
+	c.controllers[req.GetContainerId()].SetPid(info.Pid)
+
+	return startResp, nil
 }
 
 // StopContainer stops a running container with a grace period (i.e., timeout).

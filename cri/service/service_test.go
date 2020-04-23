@@ -8,6 +8,7 @@ import (
 
 	. "github.com/ostenbom/refunction/cri/service"
 	"github.com/ostenbom/refunction/cri/service/servicefakes"
+	runtime "k8s.io/cri-api/pkg/apis/runtime/v1alpha2"
 )
 
 var _ = Describe("CRI Service", func() {
@@ -46,6 +47,93 @@ var _ = Describe("CRI Service", func() {
 		})
 	})
 
+	Describe("when creating a container", func() {
+		var createResponse *runtime.CreateContainerResponse
+		var refunctionCreateRequest *runtime.CreateContainerRequest
+		BeforeEach(func() {
+			refunctionCreateRequest = &runtime.CreateContainerRequest{
+				SandboxConfig: &runtime.PodSandboxConfig{
+					Annotations: map[string]string{
+						"refunction": "any string will do",
+					},
+				},
+			}
+
+			createResponse = &runtime.CreateContainerResponse{
+				ContainerId: "potato",
+			}
+		})
+
+		It("calls containerd", func() {
+			_, err := c.CreateContainer(ctx, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(containerdCRI.CreateContainerCallCount()).To(Equal(1))
+		})
+
+		It("does not create a controller if not a refunction pod", func() {
+			containerdCRI.CreateContainerReturns(createResponse, nil)
+
+			_, err := c.CreateContainer(ctx, nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = c.GetController("potato")
+			Expect(err).To(MatchError("no such controller for id: potato"))
+		})
+
+		It("does not check status on start if not refunction pod", func() {
+			_, err := c.StartContainer(ctx, &runtime.StartContainerRequest{
+				ContainerId: "notarefunctioncontainer",
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(containerdCRI.ContainerStatusCallCount()).To(Equal(0))
+		})
+
+		Context("when pod is annotated with refunction", func() {
+			It("creates a controller for the associated containerid", func() {
+				containerdCRI.CreateContainerReturns(createResponse, nil)
+
+				_, err := c.CreateContainer(ctx, refunctionCreateRequest)
+				Expect(err).NotTo(HaveOccurred())
+
+				controller, err := c.GetController("potato")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(controller).NotTo(BeNil())
+			})
+		})
+
+		Context("having started a refunction container", func() {
+			BeforeEach(func() {
+				containerdCRI.CreateContainerReturns(createResponse, nil)
+				_, err := c.CreateContainer(ctx, refunctionCreateRequest)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("sets the controller pid", func() {
+				containerdCRI.ContainerStatusReturns(&runtime.ContainerStatusResponse{
+					Info: map[string]string{
+						"info": "{\"pid\": 42}",
+					},
+				}, nil)
+
+				_, err := c.StartContainer(ctx, &runtime.StartContainerRequest{
+					ContainerId: "potato",
+				})
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(containerdCRI.StartContainerCallCount()).To(Equal(1))
+
+				controller, err := c.GetController("potato")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(controller.GetPid()).To(Equal(42))
+			})
+
+			// It("sets the controller streams", func() {
+			//
+			// })
+		})
+	})
+
 	Describe("RunPodSandbox", func() {
 		It("calls containerd RunSandbox", func() {
 			_, err := c.RunPodSandbox(ctx, nil)
@@ -75,22 +163,6 @@ var _ = Describe("CRI Service", func() {
 			_, err := c.ListPodSandbox(ctx, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(containerdCRI.ListPodSandboxCallCount()).To(Equal(1))
-		})
-	})
-
-	Describe("CreateContainer", func() {
-		It("calls containerd", func() {
-			_, err := c.CreateContainer(ctx, nil)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(containerdCRI.CreateContainerCallCount()).To(Equal(1))
-		})
-	})
-
-	Describe("StartContainer", func() {
-		It("calls containerd", func() {
-			_, err := c.StartContainer(ctx, nil)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(containerdCRI.StartContainerCallCount()).To(Equal(1))
 		})
 	})
 
