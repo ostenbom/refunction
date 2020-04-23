@@ -3,6 +3,7 @@ package controller
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -100,6 +101,10 @@ func (c *Controller) SetPid(pid int) {
 }
 
 func (c *Controller) Activate() error {
+	if c.streams == nil {
+		return errors.New("controller has no in/out streams")
+	}
+
 	c.AwaitMessage("started")
 
 	err := c.Attach()
@@ -116,7 +121,10 @@ func (c *Controller) Activate() error {
 }
 
 func (c *Controller) Attach() error {
-	// TODO if pid is 0 check
+	if c.pid == 0 {
+		return errors.New("controller has no pid")
+	}
+
 	taskDirs, err := ioutil.ReadDir(fmt.Sprintf("/proc/%d/task", c.pid))
 	if err != nil {
 		return fmt.Errorf("could not read task entries: %s", err)
