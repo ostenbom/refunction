@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"path/filepath"
@@ -161,46 +160,15 @@ func (c *criService) CreateContainer(ctx context.Context, req *runtime.CreateCon
 
 	_, isRefunctionPod := req.GetSandboxConfig().GetAnnotations()["refunction"]
 	if isRefunctionPod {
+		// TODO: Probably dissallow the tty case
+		if req.GetConfig().GetTty() {
+			fmt.Println("Unhandled: TTY refunction container!")
+		}
+
 		c.controllers[createResponse.GetContainerId()] = controller.NewController()
 	}
 
 	return createResponse, nil
-}
-
-// StartContainer starts the container.
-func (c *criService) StartContainer(ctx context.Context, req *runtime.StartContainerRequest) (*runtime.StartContainerResponse, error) {
-	startResp, err := c.containerdCRI.StartContainer(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-
-	_, isRefunctionContainer := c.controllers[req.GetContainerId()]
-	if !isRefunctionContainer {
-		return startResp, nil
-	}
-
-	statusReq := &runtime.ContainerStatusRequest{
-		ContainerId: req.GetContainerId(),
-		Verbose:     true,
-	}
-
-	statusResp, err := c.containerdCRI.ContainerStatus(ctx, statusReq)
-	if err != nil {
-		return nil, fmt.Errorf("started container status error: %s", err)
-	}
-
-	var info ContainerInfo
-
-	infoString := statusResp.GetInfo()["info"]
-
-	err = json.Unmarshal([]byte(infoString), &info)
-	if err != nil {
-		return nil, fmt.Errorf("could not parse container info: %s", err)
-	}
-
-	c.controllers[req.GetContainerId()].SetPid(info.Pid)
-
-	return startResp, nil
 }
 
 // StopContainer stops a running container with a grace period (i.e., timeout).

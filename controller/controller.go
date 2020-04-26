@@ -21,6 +21,7 @@ import (
 type Controller interface {
 	WithSyscallTrace(io.Writer)
 	SetStreams(*io.PipeWriter, *io.PipeReader, *io.PipeReader)
+	GetStreams() (*io.PipeWriter, *io.PipeReader, *io.PipeReader)
 	SetPid(int)
 	GetPid() int
 
@@ -131,6 +132,10 @@ func (c *controller) SetStreams(in *io.PipeWriter, out *io.PipeReader, err *io.P
 			}
 		}
 	}()
+}
+
+func (c *controller) GetStreams() (*io.PipeWriter, *io.PipeReader, *io.PipeReader) {
+	return c.streams.Stdin, c.streams.Stdout, c.streams.Stderr
 }
 
 func (c *controller) SetPid(pid int) {

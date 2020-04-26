@@ -51,7 +51,7 @@ require (
 	google.golang.org/grpc v1.28.1
 	gopkg.in/square/go-jose.v2 v2.5.0 // indirect
 	gotest.tools/v3 v3.0.2 // indirect
-	k8s.io/client-go v1.5.1 // indirect
+	k8s.io/client-go v1.5.1
 	k8s.io/cri-api v0.18.1
 	k8s.io/kubernetes v1.18.1 // indirect
 	k8s.io/utils v0.0.0-20200411171748-3d5a2fe318e4 // indirect

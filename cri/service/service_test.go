@@ -89,33 +89,24 @@ var _ = Describe("CRI Service", func() {
 			Expect(containerdCRI.ContainerStatusCallCount()).To(Equal(0))
 		})
 
-		Context("when pod is annotated with refunction", func() {
-			It("creates a controller for the associated containerid", func() {
-				containerdCRI.CreateContainerReturns(createResponse, nil)
-
-				_, err := c.CreateContainer(ctx, refunctionCreateRequest)
-				Expect(err).NotTo(HaveOccurred())
-
-				controller, err := c.GetController("potato")
-				Expect(err).NotTo(HaveOccurred())
-				Expect(controller).NotTo(BeNil())
-			})
-		})
-
 		Context("having started a refunction container", func() {
 			BeforeEach(func() {
-				containerdCRI.CreateContainerReturns(createResponse, nil)
-				_, err := c.CreateContainer(ctx, refunctionCreateRequest)
-				Expect(err).NotTo(HaveOccurred())
-			})
-
-			It("sets the controller pid", func() {
 				containerdCRI.ContainerStatusReturns(&runtime.ContainerStatusResponse{
 					Info: map[string]string{
 						"info": "{\"pid\": 42}",
 					},
 				}, nil)
 
+				containerdCRI.AttachReturns(&runtime.AttachResponse{
+					Url: "http://localhost:35567",
+				}, nil)
+
+				containerdCRI.CreateContainerReturns(createResponse, nil)
+				_, err := c.CreateContainer(ctx, refunctionCreateRequest)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("sets the controller pid", func() {
 				_, err := c.StartContainer(ctx, &runtime.StartContainerRequest{
 					ContainerId: "potato",
 				})
@@ -123,14 +114,30 @@ var _ = Describe("CRI Service", func() {
 
 				Expect(containerdCRI.StartContainerCallCount()).To(Equal(1))
 
+				// ContainerStatus returns the started container pid
+				Expect(containerdCRI.ContainerStatusCallCount()).To(Equal(1))
+
 				controller, err := c.GetController("potato")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(controller.GetPid()).To(Equal(42))
 			})
 
-			// It("sets the controller streams", func() {
-			//
-			// })
+			It("sets the controller streams", func() {
+				_, err := c.StartContainer(ctx, &runtime.StartContainerRequest{
+					ContainerId: "potato",
+				})
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(containerdCRI.AttachCallCount()).To(Equal(1))
+
+				controller, err := c.GetController("potato")
+				Expect(err).NotTo(HaveOccurred())
+
+				in, out, stderr := controller.GetStreams()
+				Expect(in).NotTo(BeNil())
+				Expect(out).NotTo(BeNil())
+				Expect(stderr).NotTo(BeNil())
+			})
 		})
 	})
 

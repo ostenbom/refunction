@@ -203,6 +203,10 @@ func (m *Worker) Start() error {
 	return nil
 }
 
+func (m *Worker) GetStreams() (*io.PipeWriter, *io.PipeReader, *io.PipeReader) {
+	return m.controller.GetStreams()
+}
+
 func (m *Worker) Activate() error {
 	return m.controller.Activate()
 }
