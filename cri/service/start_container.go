@@ -37,6 +37,11 @@ func (c *criService) StartContainer(ctx context.Context, req *runtime.StartConta
 		return nil, fmt.Errorf("could not set started container streams: %s", err)
 	}
 
+	err = control.Activate()
+	if err != nil {
+		return nil, fmt.Errorf("could not activate refunction container %s: %s", containerId, err)
+	}
+
 	return startResp, nil
 }
 

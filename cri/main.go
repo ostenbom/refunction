@@ -4,6 +4,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"sync"
 
 	"github.com/containerd/containerd"
 	"github.com/ostenbom/refunction/cri/service"
@@ -56,19 +57,38 @@ func startCRIService() int {
 
 	criService.Register(criServer, refunctionServer)
 
-	err = criServer.Serve(criLis)
-	if err != nil {
-		log.Fatalf("could not start grpcServer: %v", err)
-		return 1
-	}
+	var wg sync.WaitGroup
+	wg.Add(2)
 
-	err = refunctionServer.Serve(refunctionLis)
-	if err != nil {
-		log.Fatalf("could not start grpcServer: %v", err)
-		return 1
-	}
+	errorChan := make(chan error)
 
-	return 0
+	go func() {
+		err = criServer.Serve(criLis)
+		if err != nil {
+			errorChan <- err
+		}
+
+		wg.Done()
+	}()
+
+	go func() {
+		err = refunctionServer.Serve(refunctionLis)
+		if err != nil {
+			errorChan <- err
+		}
+
+		wg.Done()
+	}()
+
+	wg.Wait()
+
+	select {
+	case err := <-errorChan:
+		log.Fatalf("error from grpc Server: %v", err)
+		return 1
+	default:
+		return 0
+	}
 }
 
 func main() {
