@@ -51,7 +51,7 @@ var _ = Describe("Node Serverless Function Management", func() {
 		It("can load a function", func() {
 			// Initiate python ready sequence
 			Expect(worker.Activate()).To(Succeed())
-			Expect(len(worker.GetCheckpoints())).To(Equal(1))
+			Expect(len(worker.Checkpoints())).To(Equal(1))
 			Eventually(stdout).Should(gbytes.Say("started"))
 
 			function := "function main(p) { return p } \nexports.handler = main;"

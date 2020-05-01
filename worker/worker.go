@@ -203,8 +203,8 @@ func (m *Worker) Start() error {
 	return nil
 }
 
-func (m *Worker) GetStreams() (*io.PipeWriter, *io.PipeReader, *io.PipeReader) {
-	return m.controller.GetStreams()
+func (m *Worker) Streams() (*io.PipeWriter, *io.PipeReader, *io.PipeReader) {
+	return m.controller.Streams()
 }
 
 func (m *Worker) Activate() error {
@@ -219,8 +219,8 @@ func (m *Worker) TakeCheckpoint() error {
 	return m.controller.TakeCheckpoint()
 }
 
-func (m *Worker) GetCheckpoints() []*State {
-	return m.controller.GetCheckpoints()
+func (m *Worker) Checkpoints() []*State {
+	return m.controller.Checkpoints()
 }
 
 func (m *Worker) SendFunction(function string) error {
@@ -279,12 +279,12 @@ func (m *Worker) SendSignal(signal syscall.Signal) error {
 	return m.controller.SendSignal(signal)
 }
 
-func (m *Worker) GetState() (*State, error) {
-	return m.controller.GetState()
+func (m *Worker) State() (*State, error) {
+	return m.controller.State()
 }
 
-func (m *Worker) GetInitialCheckpoint() (*State, error) {
-	return m.controller.GetInitialCheckpoint()
+func (m *Worker) InitialCheckpoint() (*State, error) {
+	return m.controller.InitialCheckpoint()
 }
 
 func (m *Worker) SetRegs(state *State) error {

@@ -57,7 +57,7 @@ var _ = Describe("Worker Restoring", func() {
 				incrementedLine := CalculateNextCountLine(countLocation)
 
 				// Get first state
-				state, err := worker.GetState()
+				state, err := worker.State()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(state.SaveWritablePages()).To(Succeed())
 				Expect(worker.ClearMemRefs()).To(Succeed())
@@ -98,7 +98,7 @@ var _ = Describe("Worker Restoring", func() {
 				incrementedLine := CalculateNextCountLine(countLocation)
 
 				// Get first state
-				state, err := worker.GetState()
+				state, err := worker.State()
 				Expect(err).NotTo(HaveOccurred())
 				worker.Continue()
 
@@ -137,7 +137,7 @@ var _ = Describe("Worker Restoring", func() {
 				incrementedLine := CalculateNextCountLine(countLocation)
 
 				// Get first state
-				state, err := worker.GetState()
+				state, err := worker.State()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(state.SaveWritablePages()).To(Succeed())
 				Expect(worker.ClearMemRefs()).To(Succeed())
@@ -178,7 +178,7 @@ var _ = Describe("Worker Restoring", func() {
 				incrementedLine := CalculateNextCountLine(countLocation)
 
 				// Get first state
-				state, err := worker.GetState()
+				state, err := worker.State()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(state.SaveWritablePages()).To(Succeed())
 				Expect(worker.ClearMemRefs()).To(Succeed())
@@ -222,7 +222,7 @@ var _ = Describe("Worker Restoring", func() {
 				incrementedLine := CalculateNextCountLine(countLocation)
 
 				// Get first state
-				state, err := worker.GetState()
+				state, err := worker.State()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(state.SaveWritablePages()).To(Succeed())
 				Expect(worker.ClearMemRefs()).To(Succeed())
@@ -267,7 +267,7 @@ var _ = Describe("Worker Restoring", func() {
 				incrementedLine := CalculateNextCountLine(countLocation)
 
 				// Get first state
-				state, err := worker.GetState()
+				state, err := worker.State()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(state.SaveWritablePages()).To(Succeed())
 				Expect(worker.ClearMemRefs()).To(Succeed())
@@ -323,7 +323,7 @@ def main(params):
 
 				Expect(len(response.(string))).To(Equal(100000))
 
-				state, err := worker.GetInitialCheckpoint()
+				state, err := worker.InitialCheckpoint()
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(state.MemoryChanged()).To(BeTrue())
@@ -332,7 +332,7 @@ def main(params):
 
 			It("can reset the program break", func() {
 				Expect(worker.Activate()).To(Succeed())
-				initialState, err := worker.GetInitialCheckpoint()
+				initialState, err := worker.InitialCheckpoint()
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(worker.SendFunction(largeMemoryFunc)).To(Succeed())
@@ -350,7 +350,7 @@ def main(params):
 
 			It("can remove new memory areas", func() {
 				Expect(worker.Activate()).To(Succeed())
-				initialState, err := worker.GetInitialCheckpoint()
+				initialState, err := worker.InitialCheckpoint()
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(worker.SendFunction(largeMemoryFunc)).To(Succeed())
@@ -373,7 +373,7 @@ def main(params):
 			// TODO: We are not testing for mremaps here
 			It("leaves all memory the same as it was after restore", func() {
 				Expect(worker.Activate()).To(Succeed())
-				initialState, err := worker.GetInitialCheckpoint()
+				initialState, err := worker.InitialCheckpoint()
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(worker.SendFunction(largeMemoryFunc)).To(Succeed())

@@ -76,7 +76,7 @@ var _ = Describe("CRI Service", func() {
 			_, err := c.CreateContainer(ctx, nil)
 			Expect(err).NotTo(HaveOccurred())
 
-			_, err = c.GetController("potato")
+			_, err = c.Controller("potato")
 			Expect(err).To(MatchError("no such controller for id: potato"))
 		})
 
@@ -117,9 +117,9 @@ var _ = Describe("CRI Service", func() {
 				// ContainerStatus returns the started container pid
 				Expect(containerdCRI.ContainerStatusCallCount()).To(Equal(1))
 
-				controller, err := c.GetController("potato")
+				controller, err := c.Controller("potato")
 				Expect(err).NotTo(HaveOccurred())
-				Expect(controller.GetPid()).To(Equal(42))
+				Expect(controller.Pid()).To(Equal(42))
 			})
 
 			It("sets the controller streams", func() {
@@ -130,10 +130,10 @@ var _ = Describe("CRI Service", func() {
 
 				Expect(containerdCRI.AttachCallCount()).To(Equal(1))
 
-				controller, err := c.GetController("potato")
+				controller, err := c.Controller("potato")
 				Expect(err).NotTo(HaveOccurred())
 
-				in, out, stderr := controller.GetStreams()
+				in, out, stderr := controller.Streams()
 				Expect(in).NotTo(BeNil())
 				Expect(out).NotTo(BeNil())
 				Expect(stderr).NotTo(BeNil())

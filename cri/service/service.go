@@ -25,7 +25,7 @@ type CRIService interface {
 	runtime.RuntimeServiceServer
 	runtime.ImageServiceServer
 	Register(*grpc.Server)
-	GetController(string) (controller.Controller, error)
+	Controller(string) (controller.Controller, error)
 }
 
 //go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 . ContainerdCRIService
@@ -93,7 +93,7 @@ func (c *criService) Register(s *grpc.Server) {
 	runtime.RegisterImageServiceServer(s, c)
 }
 
-func (c *criService) GetController(id string) (controller.Controller, error) {
+func (c *criService) Controller(id string) (controller.Controller, error) {
 	controller, exists := c.controllers[id]
 
 	if !exists {

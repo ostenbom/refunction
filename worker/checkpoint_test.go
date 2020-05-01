@@ -42,7 +42,7 @@ var _ = Describe("Worker Manager checkpointing", func() {
 		It("can get the processes limits", func() {
 			Expect(worker.Attach()).To(Succeed())
 			Expect(worker.Stop()).To(Succeed())
-			state, err := worker.GetState()
+			state, err := worker.State()
 			Expect(err).NotTo(HaveOccurred())
 
 			rlimits := state.GetRlimits()
@@ -67,7 +67,7 @@ var _ = Describe("Worker Manager checkpointing", func() {
 				Expect(worker.Stop()).To(Succeed())
 				Expect(worker.ClearMemRefs()).To(Succeed())
 
-				state, err := worker.GetState()
+				state, err := worker.State()
 				Expect(err).NotTo(HaveOccurred())
 
 				// while still stopped, we expect there to be no dirty pages
@@ -90,7 +90,7 @@ var _ = Describe("Worker Manager checkpointing", func() {
 				// mallocs every 50ms
 				time.Sleep(time.Millisecond * 60)
 				Expect(worker.Stop()).To(Succeed())
-				state, err := worker.GetState()
+				state, err := worker.State()
 				Expect(err).NotTo(HaveOccurred())
 
 				// after a bit, we expect the heap to change
@@ -117,7 +117,7 @@ var _ = Describe("Worker Manager checkpointing", func() {
 				// loop ticks every 50ms
 				time.Sleep(time.Millisecond * 60)
 				Expect(worker.Stop()).To(Succeed())
-				state, err := worker.GetState()
+				state, err := worker.State()
 				Expect(err).NotTo(HaveOccurred())
 
 				dirtyStack, err := state.CountDirtyPages("[stack]")
@@ -134,7 +134,7 @@ var _ = Describe("Worker Manager checkpointing", func() {
 				Expect(worker.Stop()).To(Succeed())
 				defer worker.Detach()
 
-				state, err := worker.GetState()
+				state, err := worker.State()
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(state.SaveWritablePages()).To(Succeed())
@@ -148,7 +148,7 @@ var _ = Describe("Worker Manager checkpointing", func() {
 				Expect(worker.Stop()).To(Succeed())
 				defer worker.Detach()
 
-				state, err := worker.GetState()
+				state, err := worker.State()
 				Expect(err).NotTo(HaveOccurred())
 				worker.Continue()
 
@@ -164,7 +164,7 @@ var _ = Describe("Worker Manager checkpointing", func() {
 				Expect(worker.Stop()).To(Succeed())
 				defer worker.Detach()
 
-				state, err := worker.GetState()
+				state, err := worker.State()
 				Expect(err).NotTo(HaveOccurred())
 				worker.Continue()
 
@@ -176,7 +176,7 @@ var _ = Describe("Worker Manager checkpointing", func() {
 				Expect(worker.Stop()).To(Succeed())
 				defer worker.Detach()
 
-				state, err := worker.GetState()
+				state, err := worker.State()
 				Expect(err).NotTo(HaveOccurred())
 				worker.Continue()
 
@@ -192,7 +192,7 @@ var _ = Describe("Worker Manager checkpointing", func() {
 				Expect(worker.Stop()).To(Succeed())
 				defer worker.Detach()
 
-				state, err := worker.GetState()
+				state, err := worker.State()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(state.PC()).NotTo(Equal(0))
 			})
@@ -208,11 +208,11 @@ var _ = Describe("Worker Manager checkpointing", func() {
 				Expect(worker.Stop()).To(Succeed())
 				defer worker.Detach()
 
-				state, err := worker.GetState()
+				state, err := worker.State()
 				Expect(err).NotTo(HaveOccurred())
 				worker.Continue()
 
-				time.Sleep(time.Millisecond * 100)
+				time.Sleep(time.Millisecond * 200)
 				Expect(worker.Stop()).To(Succeed())
 				changed, err := state.MemoryChanged()
 				Expect(err).NotTo(HaveOccurred())
@@ -230,7 +230,7 @@ var _ = Describe("Worker Manager checkpointing", func() {
 				Expect(worker.Stop()).To(Succeed())
 				defer worker.Detach()
 
-				state, err := worker.GetState()
+				state, err := worker.State()
 				Expect(err).NotTo(HaveOccurred())
 				worker.Continue()
 

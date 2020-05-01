@@ -105,6 +105,7 @@ func IsIn(s *Scheduler, name string, inUndeployed, inDeployed, inRunning bool) {
 	undeployed := s.UndeployedWorkers()
 	deployed := s.DeployedWorkers()
 	running := s.RunningWorkers()
+
 	Expect(Contains(name, undeployed)).To(Equal(inUndeployed))
 	Expect(Contains(name, deployed)).To(Equal(inDeployed))
 	Expect(Contains(name, running)).To(Equal(inRunning))

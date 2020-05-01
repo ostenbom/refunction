@@ -20,10 +20,10 @@ import (
 
 type Controller interface {
 	WithSyscallTrace(io.Writer)
+	Streams() (*io.PipeWriter, *io.PipeReader, *io.PipeReader)
 	SetStreams(*io.PipeWriter, *io.PipeReader, *io.PipeReader)
-	GetStreams() (*io.PipeWriter, *io.PipeReader, *io.PipeReader)
+	Pid() int
 	SetPid(int)
-	GetPid() int
 
 	Activate() error
 	Attach() error
@@ -32,9 +32,9 @@ type Controller interface {
 	Restore() error
 
 	TakeCheckpoint() error
-	GetInitialCheckpoint() (*state.State, error)
-	GetCheckpoints() []*state.State
-	GetState() (*state.State, error)
+	InitialCheckpoint() (*state.State, error)
+	Checkpoints() []*state.State
+	State() (*state.State, error)
 
 	SendFunction(function string) error
 	SendRequest(request interface{}) (interface{}, error)
@@ -134,7 +134,7 @@ func (c *controller) SetStreams(in *io.PipeWriter, out *io.PipeReader, err *io.P
 	}()
 }
 
-func (c *controller) GetStreams() (*io.PipeWriter, *io.PipeReader, *io.PipeReader) {
+func (c *controller) Streams() (*io.PipeWriter, *io.PipeReader, *io.PipeReader) {
 	return c.streams.Stdin, c.streams.Stdout, c.streams.Stderr
 }
 
@@ -142,7 +142,7 @@ func (c *controller) SetPid(pid int) {
 	c.pid = pid
 }
 
-func (c *controller) GetPid() int {
+func (c *controller) Pid() int {
 	return c.pid
 }
 
@@ -202,7 +202,7 @@ func (c *controller) TakeCheckpoint() error {
 
 	checkStart := time.Now()
 
-	state, err := c.GetState()
+	state, err := c.State()
 	if err != nil {
 		return err
 	}
@@ -223,7 +223,7 @@ func (c *controller) TakeCheckpoint() error {
 	return nil
 }
 
-func (c *controller) GetCheckpoints() []*state.State {
+func (c *controller) Checkpoints() []*state.State {
 	return c.checkpoints
 }
 
@@ -282,7 +282,9 @@ func (c *controller) SendMessage(messageType string, data interface{}) error {
 	if err != nil {
 		return err
 	}
+
 	newLineReq := append(messageString, []byte("\n")...)
+
 	_, err = c.streams.Stdin.Write(newLineReq)
 	if err != nil {
 		return err
@@ -336,6 +338,7 @@ func (c *controller) Restore() error {
 	if err != nil {
 		return fmt.Errorf("could not check program break on restore: %s", err)
 	}
+
 	if changed {
 		fixup = true
 		err := state.RestoreProgramBreak()
@@ -348,6 +351,7 @@ func (c *controller) Restore() error {
 	if err != nil {
 		return fmt.Errorf("could not check num mem locations changed on restore: %s", err)
 	}
+
 	if changed {
 		fixup = true
 		err := state.UnmapNewLocations()
@@ -367,6 +371,7 @@ func (c *controller) Restore() error {
 	if err != nil {
 		return fmt.Errorf("could not restore stack: %s", err)
 	}
+
 	err = state.RestoreRegs()
 	if err != nil {
 		return fmt.Errorf("could not restore regs: %s", err)
@@ -445,9 +450,9 @@ func (c *controller) SendSignal(signal syscall.Signal) error {
 	return syscall.Tgkill(pid, pid, signal)
 }
 
-// GetState creates a new instance of the process state.
+// State creates a new instance of the process state.
 // Caller must ensure tasks are stopped
-func (c *controller) GetState() (*state.State, error) {
+func (c *controller) State() (*state.State, error) {
 	state, err := state.NewState(c.pid, c.traceTasks)
 	if err != nil {
 		return nil, fmt.Errorf("could not get state: %s", err)
@@ -456,7 +461,7 @@ func (c *controller) GetState() (*state.State, error) {
 	return state, nil
 }
 
-func (c *controller) GetInitialCheckpoint() (*state.State, error) {
+func (c *controller) InitialCheckpoint() (*state.State, error) {
 	if len(c.checkpoints) == 0 {
 		return nil, fmt.Errorf("no initial checkpoint")
 	}
