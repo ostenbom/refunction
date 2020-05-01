@@ -13,6 +13,7 @@ import (
 var GRPCSocketAddr = "/tmp/refunction.sock"
 var containerdSocketAddr = "/run/containerd/containerd.sock"
 var K8sContainerdNamespace = "k8s.io"
+var refunctionServerAddress = "localhost:7777"
 
 func startCRIService() int {
 	if err := os.RemoveAll(GRPCSocketAddr); err != nil {
@@ -26,7 +27,7 @@ func startCRIService() int {
 		return 1
 	}
 
-	lis, err := net.Listen("unix", GRPCSocketAddr)
+	criLis, err := net.Listen("unix", GRPCSocketAddr)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 		return 1
@@ -44,11 +45,24 @@ func startCRIService() int {
 		return 1
 	}
 
-	grpcServer := grpc.NewServer()
+	refunctionLis, err := net.Listen("tcp", refunctionServerAddress)
+	if err != nil {
+		log.Fatalf("failed to listen: %v", err)
+		return 1
+	}
 
-	criService.Register(grpcServer)
+	criServer := grpc.NewServer()
+	refunctionServer := grpc.NewServer()
 
-	err = grpcServer.Serve(lis)
+	criService.Register(criServer, refunctionServer)
+
+	err = criServer.Serve(criLis)
+	if err != nil {
+		log.Fatalf("could not start grpcServer: %v", err)
+		return 1
+	}
+
+	err = refunctionServer.Serve(refunctionLis)
 	if err != nil {
 		log.Fatalf("could not start grpcServer: %v", err)
 		return 1

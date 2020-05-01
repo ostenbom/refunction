@@ -39,6 +39,8 @@ require (
 	github.com/seccomp/libseccomp-golang v0.9.1
 	github.com/sirupsen/logrus v1.5.0
 	github.com/tchap/go-patricia v2.3.0+incompatible // indirect
+	github.com/urfave/cli v1.22.2
+	github.com/urfave/cli/v2 v2.2.0
 	go.opencensus.io v0.22.3 // indirect
 	golang.org/x/crypto v0.0.0-20200406173513-056763e48d71 // indirect
 	golang.org/x/net v0.0.0-20200324143707-d3edc9973b7e

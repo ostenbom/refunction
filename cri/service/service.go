@@ -10,6 +10,7 @@ import (
 	containerdCRIconfig "github.com/containerd/cri/pkg/config"
 	containerdCRIserver "github.com/containerd/cri/pkg/server"
 	"github.com/ostenbom/refunction/controller"
+	refunction "github.com/ostenbom/refunction/cri/service/api/refunction/v1alpha"
 	"google.golang.org/grpc"
 	runtime "k8s.io/cri-api/pkg/apis/runtime/v1alpha2"
 )
@@ -24,7 +25,7 @@ const (
 type CRIService interface {
 	runtime.RuntimeServiceServer
 	runtime.ImageServiceServer
-	Register(*grpc.Server)
+	Register(*grpc.Server, *grpc.Server)
 	Controller(string) (controller.Controller, error)
 }
 
@@ -88,9 +89,11 @@ func NewFakeCRIService(containerdCRI ContainerdCRIService) CRIService {
 	return c
 }
 
-func (c *criService) Register(s *grpc.Server) {
-	runtime.RegisterRuntimeServiceServer(s, c)
-	runtime.RegisterImageServiceServer(s, c)
+func (c *criService) Register(criServer *grpc.Server, refunctionServer *grpc.Server) {
+	runtime.RegisterRuntimeServiceServer(criServer, c)
+	runtime.RegisterImageServiceServer(criServer, c)
+
+	refunction.RegisterRefunctionServiceServer(refunctionServer, c.controllers)
 }
 
 func (c *criService) Controller(id string) (controller.Controller, error) {
