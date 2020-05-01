@@ -21,7 +21,8 @@ message ListContainersResponse{
 }
 
 message Request {
-  string request = 1;
+  string container_id = 1;
+  string request = 2;
 }
 
 message Response {
@@ -29,7 +30,8 @@ message Response {
 }
 
 message FunctionRequest {
-  string function = 1;
+  string container_id = 1;
+  string function = 2;
 }
 
 message FunctionResponse {}

@@ -18,6 +18,8 @@ import (
 	"github.com/prometheus/common/log"
 )
 
+//go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 . Controller
+
 type Controller interface {
 	WithSyscallTrace(io.Writer)
 	Streams() (*io.PipeWriter, *io.PipeReader, *io.PipeReader)
