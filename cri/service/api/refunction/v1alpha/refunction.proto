@@ -36,6 +36,8 @@ message FunctionRequest {
 
 message FunctionResponse {}
 
-message RestoreRequest {}
+message RestoreRequest {
+  string container_id = 1;
+}
 
 message RestoreResponse {}

@@ -92,4 +92,20 @@ var _ = Describe("ControllerService", func() {
 			Expect(response.Response).To(Equal("{\"back\":\"grape\"}"))
 		})
 	})
+
+	Context("Restore", func() {
+		BeforeEach(func() {
+			service.CreateController("first")
+			service.CreateController("second")
+		})
+
+		It("restores the correct controller", func() {
+			_, err := service.Restore(ctx, &refunction.RestoreRequest{
+				ContainerId: "second",
+			})
+			Expect(err).To(BeNil())
+
+			Expect(createdControllers[1].RestoreCallCount()).To(Equal(1))
+		})
+	})
 })

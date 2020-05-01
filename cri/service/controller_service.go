@@ -96,9 +96,20 @@ func (s *controllerService) SendFunction(ctx context.Context, req *refunction.Fu
 	if err != nil {
 		return nil, fmt.Errorf("error sending function to container %s: %s", req.ContainerId, err)
 	}
+
 	return &refunction.FunctionResponse{}, nil
 }
 
 func (s *controllerService) Restore(ctx context.Context, req *refunction.RestoreRequest) (*refunction.RestoreResponse, error) {
+	controller, exists := s.controllers[req.ContainerId]
+	if !exists {
+		return nil, fmt.Errorf("no such controller: %s", req.ContainerId)
+	}
+
+	err := controller.Restore()
+	if err != nil {
+		return nil, fmt.Errorf("error restoring container %s: %s", req.ContainerId, err)
+	}
+
 	return &refunction.RestoreResponse{}, nil
 }
