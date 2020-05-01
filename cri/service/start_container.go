@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/url"
 
+	"github.com/ostenbom/refunction/controller"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
 	runtime "k8s.io/cri-api/pkg/apis/runtime/v1alpha2"
@@ -19,19 +20,19 @@ func (c *criService) StartContainer(ctx context.Context, req *runtime.StartConta
 		return nil, err
 	}
 
-	_, isRefunctionContainer := c.controllers[req.GetContainerId()]
+	control, isRefunctionContainer := c.controllers.Controller(req.GetContainerId())
 	if !isRefunctionContainer {
 		return startResp, nil
 	}
 
 	containerId := req.GetContainerId()
 
-	err = c.setControllerPid(ctx, containerId)
+	err = c.setControllerPid(ctx, containerId, control)
 	if err != nil {
 		return nil, fmt.Errorf("could not set started container pid: %s", err)
 	}
 
-	err = c.setControllerStreams(ctx, containerId)
+	err = c.setControllerStreams(ctx, containerId, control)
 	if err != nil {
 		return nil, fmt.Errorf("could not set started container streams: %s", err)
 	}
@@ -39,7 +40,7 @@ func (c *criService) StartContainer(ctx context.Context, req *runtime.StartConta
 	return startResp, nil
 }
 
-func (c *criService) setControllerPid(ctx context.Context, containerId string) error {
+func (c *criService) setControllerPid(ctx context.Context, containerId string, control controller.Controller) error {
 
 	statusReq := &runtime.ContainerStatusRequest{
 		ContainerId: containerId,
@@ -60,12 +61,12 @@ func (c *criService) setControllerPid(ctx context.Context, containerId string) e
 		return fmt.Errorf("could not parse container info: %s", err)
 	}
 
-	c.controllers[containerId].SetPid(info.Pid)
+	control.SetPid(info.Pid)
 
 	return nil
 }
 
-func (c *criService) setControllerStreams(ctx context.Context, containerId string) error {
+func (c *criService) setControllerStreams(ctx context.Context, containerId string, control controller.Controller) error {
 	attachReq := &runtime.AttachRequest{
 		ContainerId: containerId,
 		Stdin:       true,
@@ -90,7 +91,7 @@ func (c *criService) setControllerStreams(ctx context.Context, containerId strin
 	stdoutR, stdoutW := io.Pipe()
 	stderrR, stderrW := io.Pipe()
 
-	c.controllers[containerId].SetStreams(stdinW, stdoutR, stderrR)
+	control.SetStreams(stdinW, stdoutR, stderrR)
 
 	streamErr := make(chan error)
 	go func() {

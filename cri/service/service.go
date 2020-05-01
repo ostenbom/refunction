@@ -37,7 +37,7 @@ type ContainerdCRIService interface {
 type criService struct {
 	client        *containerd.Client
 	containerdCRI ContainerdCRIService
-	controllers   map[string]controller.Controller
+	controllers   ControllerServer
 }
 
 type ContainerInfo struct {
@@ -72,7 +72,7 @@ func NewCRIService(client *containerd.Client) (CRIService, error) {
 	c := &criService{
 		client:        client,
 		containerdCRI: containerdCRI,
-		controllers:   make(map[string]controller.Controller),
+		controllers:   NewControllerServer(),
 	}
 
 	return c, nil
@@ -82,7 +82,7 @@ func NewFakeCRIService(containerdCRI ContainerdCRIService) CRIService {
 	c := &criService{
 		client:        &containerd.Client{},
 		containerdCRI: containerdCRI,
-		controllers:   make(map[string]controller.Controller),
+		controllers:   NewControllerServer(),
 	}
 
 	return c
@@ -94,8 +94,7 @@ func (c *criService) Register(s *grpc.Server) {
 }
 
 func (c *criService) Controller(id string) (controller.Controller, error) {
-	controller, exists := c.controllers[id]
-
+	controller, exists := c.controllers.Controller(id)
 	if !exists {
 		return nil, fmt.Errorf("no such controller for id: %s", id)
 	}
@@ -165,7 +164,7 @@ func (c *criService) CreateContainer(ctx context.Context, req *runtime.CreateCon
 			fmt.Println("Unhandled: TTY refunction container!")
 		}
 
-		c.controllers[createResponse.GetContainerId()] = controller.NewController()
+		c.controllers.CreateController(createResponse.GetContainerId())
 	}
 
 	return createResponse, nil
