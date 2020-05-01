@@ -37,7 +37,7 @@ type ContainerdCRIService interface {
 type criService struct {
 	client        *containerd.Client
 	containerdCRI ContainerdCRIService
-	controllers   ControllerServer
+	controllers   ControllerService
 }
 
 type ContainerInfo struct {
@@ -72,7 +72,7 @@ func NewCRIService(client *containerd.Client) (CRIService, error) {
 	c := &criService{
 		client:        client,
 		containerdCRI: containerdCRI,
-		controllers:   NewControllerServer(),
+		controllers:   NewControllerService(),
 	}
 
 	return c, nil
@@ -82,7 +82,7 @@ func NewFakeCRIService(containerdCRI ContainerdCRIService) CRIService {
 	c := &criService{
 		client:        &containerd.Client{},
 		containerdCRI: containerdCRI,
-		controllers:   NewControllerServer(),
+		controllers:   NewControllerService(),
 	}
 
 	return c

@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package refunction.v1alpha;
+option go_package = "refunctionv1alpha";
+
+service RefunctionService {
+  // ListControllers? ListSandboxes?
+  rpc ListContainers(ListContainersRequest) returns (ListContainersResponse) {}
+
+  rpc SendRequest(Request) returns (Response) {}
+
+  rpc SendFunction(FunctionRequest) returns (FunctionResponse) {}
+
+  rpc Restore(RestoreRequest) returns (RestoreResponse) {}
+}
+
+message ListContainersRequest{}
+
+message ListContainersResponse{
+  repeated string container_ids = 1;
+}
+
+message Request {
+  string request = 1;
+}
+
+message Response {
+  string response = 1;
+}
+
+message FunctionRequest {
+  string function = 1;
+}
+
+message FunctionResponse {}
+
+message RestoreRequest {}
+
+message RestoreResponse {}

@@ -11,7 +11,7 @@ var _ = Describe("ControllerServer", func() {
 	var c_server ControllerServer
 
 	BeforeEach(func() {
-		c_server = NewControllerServer()
+		c_server = NewControllerService()
 		c_server.Start()
 	})
 
