@@ -84,13 +84,11 @@ func (c *criService) setControllerStreams(ctx context.Context, containerId strin
 		return fmt.Errorf("could not attach to refunction container: %s", err)
 	}
 
-	fmt.Printf("Pretty amazing attach response: %s\n", attachResp.GetUrl())
 	attachUrl, err := url.Parse(attachResp.GetUrl())
 	if err != nil {
 		fmt.Printf("found it hard to parse that: %s\n", err)
 		return err
 	}
-	fmt.Printf("Pretty amazing parsed attach url: %s\n", attachUrl)
 
 	stdinR, stdinW := io.Pipe()
 	stdoutR, stdoutW := io.Pipe()
@@ -98,11 +96,12 @@ func (c *criService) setControllerStreams(ctx context.Context, containerId strin
 
 	control.SetStreams(stdinW, stdoutR, stderrR)
 
-	streamErr := make(chan error)
-	go func() {
-		exec, err := remotecommand.NewSPDYExecutor(&restclient.Config{}, "POST", attachUrl)
-		streamErr <- err
+	exec, err := remotecommand.NewSPDYExecutor(&restclient.Config{}, "POST", attachUrl)
+	if err != nil {
+		return fmt.Errorf("could not stream refunction container: %s", err)
+	}
 
+	go func() {
 		opts := remotecommand.StreamOptions{
 			Stdin:  stdinR,
 			Stdout: stdoutW,
@@ -116,11 +115,6 @@ func (c *criService) setControllerStreams(ctx context.Context, containerId strin
 			fmt.Printf("stream error for container %s: %s\n", containerId, err)
 		}
 	}()
-
-	err = <-streamErr
-	if err != nil {
-		return fmt.Errorf("could not stream refunction container: %s", err)
-	}
 
 	return nil
 }

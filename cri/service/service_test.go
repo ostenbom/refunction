@@ -6,6 +6,8 @@ import (
 
 	"context"
 
+	"github.com/ostenbom/refunction/controller"
+	"github.com/ostenbom/refunction/controller/controllerfakes"
 	. "github.com/ostenbom/refunction/cri/service"
 	"github.com/ostenbom/refunction/cri/service/servicefakes"
 	runtime "k8s.io/cri-api/pkg/apis/runtime/v1alpha2"
@@ -15,10 +17,19 @@ var _ = Describe("CRI Service", func() {
 	var c CRIService
 	var containerdCRI *servicefakes.FakeContainerdCRIService
 	ctx := context.Background()
+	var createdControllers []*controllerfakes.FakeController
+
+	fake_creator := func() controller.Controller {
+		c := new(controllerfakes.FakeController)
+		createdControllers = append(createdControllers, c)
+		return c
+	}
 
 	BeforeEach(func() {
+		createdControllers = []*controllerfakes.FakeController{}
+		controllers := NewFakeControllerService(fake_creator)
 		containerdCRI = new(servicefakes.FakeContainerdCRIService)
-		c = NewFakeCRIService(containerdCRI)
+		c = NewFakeCRIService(containerdCRI, controllers)
 	})
 
 	Describe("Version", func() {
@@ -57,6 +68,9 @@ var _ = Describe("CRI Service", func() {
 						"refunction": "any string will do",
 					},
 				},
+				Config: &runtime.ContainerConfig{
+					Stdin: false,
+				},
 			}
 
 			createResponse = &runtime.CreateContainerResponse{
@@ -68,6 +82,14 @@ var _ = Describe("CRI Service", func() {
 			_, err := c.CreateContainer(ctx, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(containerdCRI.CreateContainerCallCount()).To(Equal(1))
+		})
+
+		It("creates containers with stdin", func() {
+			_, err := c.CreateContainer(ctx, refunctionCreateRequest)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(containerdCRI.CreateContainerCallCount()).To(Equal(1))
+			_, createReq := containerdCRI.CreateContainerArgsForCall(0)
+			Expect(createReq.GetConfig().GetStdin()).To(BeTrue())
 		})
 
 		It("does not create a controller if not a refunction pod", func() {
@@ -98,7 +120,7 @@ var _ = Describe("CRI Service", func() {
 				}, nil)
 
 				containerdCRI.AttachReturns(&runtime.AttachResponse{
-					Url: "http://localhost:35567",
+					Url: "http://localhost:90000",
 				}, nil)
 
 				containerdCRI.CreateContainerReturns(createResponse, nil)
@@ -117,9 +139,12 @@ var _ = Describe("CRI Service", func() {
 				// ContainerStatus returns the started container pid
 				Expect(containerdCRI.ContainerStatusCallCount()).To(Equal(1))
 
-				controller, err := c.Controller("potato")
-				Expect(err).NotTo(HaveOccurred())
-				Expect(controller.Pid()).To(Equal(42))
+				Expect(len(createdControllers)).To(Equal(1))
+				controller := createdControllers[0]
+
+				Expect(controller.SetPidCallCount()).To(Equal(1))
+				pid := controller.SetPidArgsForCall(0)
+				Expect(pid).To(Equal(42))
 			})
 
 			It("sets the controller streams", func() {
@@ -130,13 +155,28 @@ var _ = Describe("CRI Service", func() {
 
 				Expect(containerdCRI.AttachCallCount()).To(Equal(1))
 
-				controller, err := c.Controller("potato")
-				Expect(err).NotTo(HaveOccurred())
+				Expect(len(createdControllers)).To(Equal(1))
+				controller := createdControllers[0]
 
-				in, out, stderr := controller.Streams()
+				Expect(controller.SetStreamsCallCount()).To(Equal(1))
+				in, out, stderr := controller.SetStreamsArgsForCall(0)
+
 				Expect(in).NotTo(BeNil())
 				Expect(out).NotTo(BeNil())
 				Expect(stderr).NotTo(BeNil())
+			})
+
+			It("activates the controller", func() {
+				_, err := c.StartContainer(ctx, &runtime.StartContainerRequest{
+					ContainerId: "potato",
+				})
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(containerdCRI.AttachCallCount()).To(Equal(1))
+
+				Expect(len(createdControllers)).To(Equal(1))
+				controller := createdControllers[0]
+				Expect(controller.ActivateCallCount()).To(Equal(1))
 			})
 		})
 	})

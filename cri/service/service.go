@@ -79,11 +79,11 @@ func NewCRIService(client *containerd.Client) (CRIService, error) {
 	return c, nil
 }
 
-func NewFakeCRIService(containerdCRI ContainerdCRIService) CRIService {
+func NewFakeCRIService(containerdCRI ContainerdCRIService, controllers ControllerService) CRIService {
 	c := &criService{
 		client:        &containerd.Client{},
 		containerdCRI: containerdCRI,
-		controllers:   NewControllerService(),
+		controllers:   controllers,
 	}
 
 	return c
@@ -151,26 +151,6 @@ func (c *criService) PodSandboxStatus(ctx context.Context, req *runtime.PodSandb
 // ListPodSandbox returns a list of PodSandboxes.
 func (c *criService) ListPodSandbox(ctx context.Context, req *runtime.ListPodSandboxRequest) (*runtime.ListPodSandboxResponse, error) {
 	return c.containerdCRI.ListPodSandbox(ctx, req)
-}
-
-// CreateContainer creates a new container in specified PodSandbox
-func (c *criService) CreateContainer(ctx context.Context, req *runtime.CreateContainerRequest) (*runtime.CreateContainerResponse, error) {
-	createResponse, err := c.containerdCRI.CreateContainer(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-
-	_, isRefunctionPod := req.GetSandboxConfig().GetAnnotations()["refunction"]
-	if isRefunctionPod {
-		// TODO: Probably dissallow the tty case
-		if req.GetConfig().GetTty() {
-			fmt.Println("Unhandled: TTY refunction container!")
-		}
-
-		c.controllers.CreateController(createResponse.GetContainerId())
-	}
-
-	return createResponse, nil
 }
 
 // StopContainer stops a running container with a grace period (i.e., timeout).

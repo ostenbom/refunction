@@ -18,6 +18,7 @@ getruntimes/aws_env
 # Don't store binaries
 cri/cri
 invoker/invoker
+funk/funk
 
 # Pretty sure we don't need this
 .gobincache

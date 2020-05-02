@@ -104,8 +104,6 @@ func (c *controller) SetStreams(in *io.PipeWriter, out *io.PipeReader, err *io.P
 	}
 
 	go func() {
-		// Uncomment for debugging
-		// io.Copy(os.Stdout, stdoutRead)
 		outBuffer := bufio.NewReader(out)
 
 		for {
@@ -113,6 +111,9 @@ func (c *controller) SetStreams(in *io.PipeWriter, out *io.PipeReader, err *io.P
 			if err != nil {
 				return
 			}
+
+			// Uncomment for debugging
+			// fmt.Printf("line from child: %s", line)
 
 			var message Message
 			err = json.Unmarshal([]byte(line), &message)
@@ -489,6 +490,7 @@ func (c *controller) ClearMemRefs() error {
 	}
 	defer f.Close()
 
+	// https://github.com/torvalds/linux/blob/master/Documentation/admin-guide/mm/soft-dirty.rst
 	_, err = f.WriteString("4")
 	if err != nil {
 		return fmt.Errorf("could not clear_refs for pid %d: %s", pid, err)

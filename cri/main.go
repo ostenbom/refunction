@@ -60,7 +60,7 @@ func startCRIService() int {
 	var wg sync.WaitGroup
 	wg.Add(2)
 
-	errorChan := make(chan error)
+	errorChan := make(chan error, 2)
 
 	go func() {
 		err = criServer.Serve(criLis)
