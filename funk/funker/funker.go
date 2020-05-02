@@ -10,43 +10,30 @@ import (
 
 	refunction "github.com/ostenbom/refunction/cri/service/api/refunction/v1alpha"
 	"github.com/urfave/cli/v2"
-	"google.golang.org/grpc"
 )
 
-//go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 github.com/ostenbom/refunction/cri/service/api/refunction/v1alpha.RefunctionServiceClient
-
 type Funker struct {
-	client refunction.RefunctionServiceClient
+	client Client
 }
 
 func (f *Funker) Start() error {
-	if f.client != nil {
-		return nil
-	}
-
-	target, err := getTarget()
-	if err != nil {
-		return err
-	}
-
-	conn, err := grpc.Dial(target, grpc.WithInsecure())
-	if err != nil {
-		return err
-	}
-
-	f.client = refunction.NewRefunctionServiceClient(conn)
-
-	return nil
+	return f.client.Start()
 }
 
-func NewFakeFunker(client refunction.RefunctionServiceClient) *Funker {
+func (f *Funker) Close() {
+	f.client.Close()
+}
+
+func NewFakeFunker(client Client) *Funker {
 	return &Funker{
 		client: client,
 	}
 }
 
 func NewFunker() *Funker {
-	return &Funker{}
+	return &Funker{
+		client: &client{},
+	}
 }
 
 func (f *Funker) App() *cli.App {
@@ -103,7 +90,19 @@ func (f *Funker) App() *cli.App {
 						Required: true,
 					},
 				},
-				Action: f.SendFunction,
+				Action: f.SendRequest,
+			},
+			{
+				Name:  "restore",
+				Usage: "restore container to initial state",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:     "container",
+						Aliases:  []string{"c"},
+						Required: true,
+					},
+				},
+				Action: f.Restore,
 			},
 		},
 	}
@@ -134,6 +133,7 @@ func (f *Funker) ListContainers(c *cli.Context) error {
 		fmt.Println(id)
 	}
 
+	f.Close()
 	return nil
 }
 
@@ -159,6 +159,7 @@ func (f *Funker) SendFunction(c *cli.Context) error {
 
 	fmt.Printf("sent function %s to container %s\n", function, container)
 
+	f.Close()
 	return nil
 }
 
@@ -185,14 +186,30 @@ func (f *Funker) SendRequest(c *cli.Context) error {
 	fmt.Printf("sent request %s to container %s\n", request, container)
 	fmt.Printf("response: %s\n", requestResponse.Response)
 
+	f.Close()
 	return nil
 }
 
-func getTarget() (string, error) {
-	targetBytes, err := ioutil.ReadFile(path.Join(os.Getenv("HOME"), ".funkrc"))
+func (f *Funker) Restore(c *cli.Context) error {
+	err := f.Start()
 	if err != nil {
-		return "", err
+		return err
 	}
 
-	return string(targetBytes), nil
+	container := c.String("container")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	_, err = f.client.Restore(ctx, &refunction.RestoreRequest{
+		ContainerId: container,
+	})
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("restored container %s\n", container)
+
+	f.Close()
+	return nil
 }

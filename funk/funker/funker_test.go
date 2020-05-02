@@ -19,11 +19,11 @@ var _ = Describe("Funker", func() {
 	var ctx *cli.Context
 	var funker *Funker
 	var app *cli.App
-	var fakeService *funkerfakes.FakeRefunctionServiceClient
+	var fakeService *funkerfakes.FakeClient
 	// var set *flag.FlagSet
 
 	BeforeEach(func() {
-		fakeService = new(funkerfakes.FakeRefunctionServiceClient)
+		fakeService = new(funkerfakes.FakeClient)
 		funker = NewFakeFunker(fakeService)
 		app = funker.App()
 	})
@@ -93,5 +93,20 @@ var _ = Describe("Funker", func() {
 			Expect(sendReq.ContainerId).To(Equal("potato"))
 		})
 
+		It("can restore containers", func() {
+			set := flag.NewFlagSet("unused", 0)
+			set.String("container", "", "")
+			Expect(set.Set("container", "potato")).To(Succeed())
+
+			fakeService.RestoreReturns(&refunction.RestoreResponse{}, nil)
+
+			ctx = cli.NewContext(app, set, nil)
+			err := funker.Restore(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(fakeService.RestoreCallCount()).To(Equal(1))
+			_, restoreReq, _ := fakeService.RestoreArgsForCall(0)
+			Expect(restoreReq.ContainerId).To(Equal("potato"))
+		})
 	})
 })

@@ -6,10 +6,15 @@ import (
 	"sync"
 
 	refunctionv1alpha "github.com/ostenbom/refunction/cri/service/api/refunction/v1alpha"
+	"github.com/ostenbom/refunction/funk/funker"
 	"google.golang.org/grpc"
 )
 
-type FakeRefunctionServiceClient struct {
+type FakeClient struct {
+	CloseStub        func()
+	closeMutex       sync.RWMutex
+	closeArgsForCall []struct {
+	}
 	ListContainersStub        func(context.Context, *refunctionv1alpha.ListContainersRequest, ...grpc.CallOption) (*refunctionv1alpha.ListContainersResponse, error)
 	listContainersMutex       sync.RWMutex
 	listContainersArgsForCall []struct {
@@ -70,11 +75,44 @@ type FakeRefunctionServiceClient struct {
 		result1 *refunctionv1alpha.Response
 		result2 error
 	}
+	StartStub        func() error
+	startMutex       sync.RWMutex
+	startArgsForCall []struct {
+	}
+	startReturns struct {
+		result1 error
+	}
+	startReturnsOnCall map[int]struct {
+		result1 error
+	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *FakeRefunctionServiceClient) ListContainers(arg1 context.Context, arg2 *refunctionv1alpha.ListContainersRequest, arg3 ...grpc.CallOption) (*refunctionv1alpha.ListContainersResponse, error) {
+func (fake *FakeClient) Close() {
+	fake.closeMutex.Lock()
+	fake.closeArgsForCall = append(fake.closeArgsForCall, struct {
+	}{})
+	fake.recordInvocation("Close", []interface{}{})
+	fake.closeMutex.Unlock()
+	if fake.CloseStub != nil {
+		fake.CloseStub()
+	}
+}
+
+func (fake *FakeClient) CloseCallCount() int {
+	fake.closeMutex.RLock()
+	defer fake.closeMutex.RUnlock()
+	return len(fake.closeArgsForCall)
+}
+
+func (fake *FakeClient) CloseCalls(stub func()) {
+	fake.closeMutex.Lock()
+	defer fake.closeMutex.Unlock()
+	fake.CloseStub = stub
+}
+
+func (fake *FakeClient) ListContainers(arg1 context.Context, arg2 *refunctionv1alpha.ListContainersRequest, arg3 ...grpc.CallOption) (*refunctionv1alpha.ListContainersResponse, error) {
 	fake.listContainersMutex.Lock()
 	ret, specificReturn := fake.listContainersReturnsOnCall[len(fake.listContainersArgsForCall)]
 	fake.listContainersArgsForCall = append(fake.listContainersArgsForCall, struct {
@@ -94,26 +132,26 @@ func (fake *FakeRefunctionServiceClient) ListContainers(arg1 context.Context, ar
 	return fakeReturns.result1, fakeReturns.result2
 }
 
-func (fake *FakeRefunctionServiceClient) ListContainersCallCount() int {
+func (fake *FakeClient) ListContainersCallCount() int {
 	fake.listContainersMutex.RLock()
 	defer fake.listContainersMutex.RUnlock()
 	return len(fake.listContainersArgsForCall)
 }
 
-func (fake *FakeRefunctionServiceClient) ListContainersCalls(stub func(context.Context, *refunctionv1alpha.ListContainersRequest, ...grpc.CallOption) (*refunctionv1alpha.ListContainersResponse, error)) {
+func (fake *FakeClient) ListContainersCalls(stub func(context.Context, *refunctionv1alpha.ListContainersRequest, ...grpc.CallOption) (*refunctionv1alpha.ListContainersResponse, error)) {
 	fake.listContainersMutex.Lock()
 	defer fake.listContainersMutex.Unlock()
 	fake.ListContainersStub = stub
 }
 
-func (fake *FakeRefunctionServiceClient) ListContainersArgsForCall(i int) (context.Context, *refunctionv1alpha.ListContainersRequest, []grpc.CallOption) {
+func (fake *FakeClient) ListContainersArgsForCall(i int) (context.Context, *refunctionv1alpha.ListContainersRequest, []grpc.CallOption) {
 	fake.listContainersMutex.RLock()
 	defer fake.listContainersMutex.RUnlock()
 	argsForCall := fake.listContainersArgsForCall[i]
 	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3
 }
 
-func (fake *FakeRefunctionServiceClient) ListContainersReturns(result1 *refunctionv1alpha.ListContainersResponse, result2 error) {
+func (fake *FakeClient) ListContainersReturns(result1 *refunctionv1alpha.ListContainersResponse, result2 error) {
 	fake.listContainersMutex.Lock()
 	defer fake.listContainersMutex.Unlock()
 	fake.ListContainersStub = nil
@@ -123,7 +161,7 @@ func (fake *FakeRefunctionServiceClient) ListContainersReturns(result1 *refuncti
 	}{result1, result2}
 }
 
-func (fake *FakeRefunctionServiceClient) ListContainersReturnsOnCall(i int, result1 *refunctionv1alpha.ListContainersResponse, result2 error) {
+func (fake *FakeClient) ListContainersReturnsOnCall(i int, result1 *refunctionv1alpha.ListContainersResponse, result2 error) {
 	fake.listContainersMutex.Lock()
 	defer fake.listContainersMutex.Unlock()
 	fake.ListContainersStub = nil
@@ -139,7 +177,7 @@ func (fake *FakeRefunctionServiceClient) ListContainersReturnsOnCall(i int, resu
 	}{result1, result2}
 }
 
-func (fake *FakeRefunctionServiceClient) Restore(arg1 context.Context, arg2 *refunctionv1alpha.RestoreRequest, arg3 ...grpc.CallOption) (*refunctionv1alpha.RestoreResponse, error) {
+func (fake *FakeClient) Restore(arg1 context.Context, arg2 *refunctionv1alpha.RestoreRequest, arg3 ...grpc.CallOption) (*refunctionv1alpha.RestoreResponse, error) {
 	fake.restoreMutex.Lock()
 	ret, specificReturn := fake.restoreReturnsOnCall[len(fake.restoreArgsForCall)]
 	fake.restoreArgsForCall = append(fake.restoreArgsForCall, struct {
@@ -159,26 +197,26 @@ func (fake *FakeRefunctionServiceClient) Restore(arg1 context.Context, arg2 *ref
 	return fakeReturns.result1, fakeReturns.result2
 }
 
-func (fake *FakeRefunctionServiceClient) RestoreCallCount() int {
+func (fake *FakeClient) RestoreCallCount() int {
 	fake.restoreMutex.RLock()
 	defer fake.restoreMutex.RUnlock()
 	return len(fake.restoreArgsForCall)
 }
 
-func (fake *FakeRefunctionServiceClient) RestoreCalls(stub func(context.Context, *refunctionv1alpha.RestoreRequest, ...grpc.CallOption) (*refunctionv1alpha.RestoreResponse, error)) {
+func (fake *FakeClient) RestoreCalls(stub func(context.Context, *refunctionv1alpha.RestoreRequest, ...grpc.CallOption) (*refunctionv1alpha.RestoreResponse, error)) {
 	fake.restoreMutex.Lock()
 	defer fake.restoreMutex.Unlock()
 	fake.RestoreStub = stub
 }
 
-func (fake *FakeRefunctionServiceClient) RestoreArgsForCall(i int) (context.Context, *refunctionv1alpha.RestoreRequest, []grpc.CallOption) {
+func (fake *FakeClient) RestoreArgsForCall(i int) (context.Context, *refunctionv1alpha.RestoreRequest, []grpc.CallOption) {
 	fake.restoreMutex.RLock()
 	defer fake.restoreMutex.RUnlock()
 	argsForCall := fake.restoreArgsForCall[i]
 	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3
 }
 
-func (fake *FakeRefunctionServiceClient) RestoreReturns(result1 *refunctionv1alpha.RestoreResponse, result2 error) {
+func (fake *FakeClient) RestoreReturns(result1 *refunctionv1alpha.RestoreResponse, result2 error) {
 	fake.restoreMutex.Lock()
 	defer fake.restoreMutex.Unlock()
 	fake.RestoreStub = nil
@@ -188,7 +226,7 @@ func (fake *FakeRefunctionServiceClient) RestoreReturns(result1 *refunctionv1alp
 	}{result1, result2}
 }
 
-func (fake *FakeRefunctionServiceClient) RestoreReturnsOnCall(i int, result1 *refunctionv1alpha.RestoreResponse, result2 error) {
+func (fake *FakeClient) RestoreReturnsOnCall(i int, result1 *refunctionv1alpha.RestoreResponse, result2 error) {
 	fake.restoreMutex.Lock()
 	defer fake.restoreMutex.Unlock()
 	fake.RestoreStub = nil
@@ -204,7 +242,7 @@ func (fake *FakeRefunctionServiceClient) RestoreReturnsOnCall(i int, result1 *re
 	}{result1, result2}
 }
 
-func (fake *FakeRefunctionServiceClient) SendFunction(arg1 context.Context, arg2 *refunctionv1alpha.FunctionRequest, arg3 ...grpc.CallOption) (*refunctionv1alpha.FunctionResponse, error) {
+func (fake *FakeClient) SendFunction(arg1 context.Context, arg2 *refunctionv1alpha.FunctionRequest, arg3 ...grpc.CallOption) (*refunctionv1alpha.FunctionResponse, error) {
 	fake.sendFunctionMutex.Lock()
 	ret, specificReturn := fake.sendFunctionReturnsOnCall[len(fake.sendFunctionArgsForCall)]
 	fake.sendFunctionArgsForCall = append(fake.sendFunctionArgsForCall, struct {
@@ -224,26 +262,26 @@ func (fake *FakeRefunctionServiceClient) SendFunction(arg1 context.Context, arg2
 	return fakeReturns.result1, fakeReturns.result2
 }
 
-func (fake *FakeRefunctionServiceClient) SendFunctionCallCount() int {
+func (fake *FakeClient) SendFunctionCallCount() int {
 	fake.sendFunctionMutex.RLock()
 	defer fake.sendFunctionMutex.RUnlock()
 	return len(fake.sendFunctionArgsForCall)
 }
 
-func (fake *FakeRefunctionServiceClient) SendFunctionCalls(stub func(context.Context, *refunctionv1alpha.FunctionRequest, ...grpc.CallOption) (*refunctionv1alpha.FunctionResponse, error)) {
+func (fake *FakeClient) SendFunctionCalls(stub func(context.Context, *refunctionv1alpha.FunctionRequest, ...grpc.CallOption) (*refunctionv1alpha.FunctionResponse, error)) {
 	fake.sendFunctionMutex.Lock()
 	defer fake.sendFunctionMutex.Unlock()
 	fake.SendFunctionStub = stub
 }
 
-func (fake *FakeRefunctionServiceClient) SendFunctionArgsForCall(i int) (context.Context, *refunctionv1alpha.FunctionRequest, []grpc.CallOption) {
+func (fake *FakeClient) SendFunctionArgsForCall(i int) (context.Context, *refunctionv1alpha.FunctionRequest, []grpc.CallOption) {
 	fake.sendFunctionMutex.RLock()
 	defer fake.sendFunctionMutex.RUnlock()
 	argsForCall := fake.sendFunctionArgsForCall[i]
 	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3
 }
 
-func (fake *FakeRefunctionServiceClient) SendFunctionReturns(result1 *refunctionv1alpha.FunctionResponse, result2 error) {
+func (fake *FakeClient) SendFunctionReturns(result1 *refunctionv1alpha.FunctionResponse, result2 error) {
 	fake.sendFunctionMutex.Lock()
 	defer fake.sendFunctionMutex.Unlock()
 	fake.SendFunctionStub = nil
@@ -253,7 +291,7 @@ func (fake *FakeRefunctionServiceClient) SendFunctionReturns(result1 *refunction
 	}{result1, result2}
 }
 
-func (fake *FakeRefunctionServiceClient) SendFunctionReturnsOnCall(i int, result1 *refunctionv1alpha.FunctionResponse, result2 error) {
+func (fake *FakeClient) SendFunctionReturnsOnCall(i int, result1 *refunctionv1alpha.FunctionResponse, result2 error) {
 	fake.sendFunctionMutex.Lock()
 	defer fake.sendFunctionMutex.Unlock()
 	fake.SendFunctionStub = nil
@@ -269,7 +307,7 @@ func (fake *FakeRefunctionServiceClient) SendFunctionReturnsOnCall(i int, result
 	}{result1, result2}
 }
 
-func (fake *FakeRefunctionServiceClient) SendRequest(arg1 context.Context, arg2 *refunctionv1alpha.Request, arg3 ...grpc.CallOption) (*refunctionv1alpha.Response, error) {
+func (fake *FakeClient) SendRequest(arg1 context.Context, arg2 *refunctionv1alpha.Request, arg3 ...grpc.CallOption) (*refunctionv1alpha.Response, error) {
 	fake.sendRequestMutex.Lock()
 	ret, specificReturn := fake.sendRequestReturnsOnCall[len(fake.sendRequestArgsForCall)]
 	fake.sendRequestArgsForCall = append(fake.sendRequestArgsForCall, struct {
@@ -289,26 +327,26 @@ func (fake *FakeRefunctionServiceClient) SendRequest(arg1 context.Context, arg2 
 	return fakeReturns.result1, fakeReturns.result2
 }
 
-func (fake *FakeRefunctionServiceClient) SendRequestCallCount() int {
+func (fake *FakeClient) SendRequestCallCount() int {
 	fake.sendRequestMutex.RLock()
 	defer fake.sendRequestMutex.RUnlock()
 	return len(fake.sendRequestArgsForCall)
 }
 
-func (fake *FakeRefunctionServiceClient) SendRequestCalls(stub func(context.Context, *refunctionv1alpha.Request, ...grpc.CallOption) (*refunctionv1alpha.Response, error)) {
+func (fake *FakeClient) SendRequestCalls(stub func(context.Context, *refunctionv1alpha.Request, ...grpc.CallOption) (*refunctionv1alpha.Response, error)) {
 	fake.sendRequestMutex.Lock()
 	defer fake.sendRequestMutex.Unlock()
 	fake.SendRequestStub = stub
 }
 
-func (fake *FakeRefunctionServiceClient) SendRequestArgsForCall(i int) (context.Context, *refunctionv1alpha.Request, []grpc.CallOption) {
+func (fake *FakeClient) SendRequestArgsForCall(i int) (context.Context, *refunctionv1alpha.Request, []grpc.CallOption) {
 	fake.sendRequestMutex.RLock()
 	defer fake.sendRequestMutex.RUnlock()
 	argsForCall := fake.sendRequestArgsForCall[i]
 	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3
 }
 
-func (fake *FakeRefunctionServiceClient) SendRequestReturns(result1 *refunctionv1alpha.Response, result2 error) {
+func (fake *FakeClient) SendRequestReturns(result1 *refunctionv1alpha.Response, result2 error) {
 	fake.sendRequestMutex.Lock()
 	defer fake.sendRequestMutex.Unlock()
 	fake.SendRequestStub = nil
@@ -318,7 +356,7 @@ func (fake *FakeRefunctionServiceClient) SendRequestReturns(result1 *refunctionv
 	}{result1, result2}
 }
 
-func (fake *FakeRefunctionServiceClient) SendRequestReturnsOnCall(i int, result1 *refunctionv1alpha.Response, result2 error) {
+func (fake *FakeClient) SendRequestReturnsOnCall(i int, result1 *refunctionv1alpha.Response, result2 error) {
 	fake.sendRequestMutex.Lock()
 	defer fake.sendRequestMutex.Unlock()
 	fake.SendRequestStub = nil
@@ -334,9 +372,63 @@ func (fake *FakeRefunctionServiceClient) SendRequestReturnsOnCall(i int, result1
 	}{result1, result2}
 }
 
-func (fake *FakeRefunctionServiceClient) Invocations() map[string][][]interface{} {
+func (fake *FakeClient) Start() error {
+	fake.startMutex.Lock()
+	ret, specificReturn := fake.startReturnsOnCall[len(fake.startArgsForCall)]
+	fake.startArgsForCall = append(fake.startArgsForCall, struct {
+	}{})
+	fake.recordInvocation("Start", []interface{}{})
+	fake.startMutex.Unlock()
+	if fake.StartStub != nil {
+		return fake.StartStub()
+	}
+	if specificReturn {
+		return ret.result1
+	}
+	fakeReturns := fake.startReturns
+	return fakeReturns.result1
+}
+
+func (fake *FakeClient) StartCallCount() int {
+	fake.startMutex.RLock()
+	defer fake.startMutex.RUnlock()
+	return len(fake.startArgsForCall)
+}
+
+func (fake *FakeClient) StartCalls(stub func() error) {
+	fake.startMutex.Lock()
+	defer fake.startMutex.Unlock()
+	fake.StartStub = stub
+}
+
+func (fake *FakeClient) StartReturns(result1 error) {
+	fake.startMutex.Lock()
+	defer fake.startMutex.Unlock()
+	fake.StartStub = nil
+	fake.startReturns = struct {
+		result1 error
+	}{result1}
+}
+
+func (fake *FakeClient) StartReturnsOnCall(i int, result1 error) {
+	fake.startMutex.Lock()
+	defer fake.startMutex.Unlock()
+	fake.StartStub = nil
+	if fake.startReturnsOnCall == nil {
+		fake.startReturnsOnCall = make(map[int]struct {
+			result1 error
+		})
+	}
+	fake.startReturnsOnCall[i] = struct {
+		result1 error
+	}{result1}
+}
+
+func (fake *FakeClient) Invocations() map[string][][]interface{} {
 	fake.invocationsMutex.RLock()
 	defer fake.invocationsMutex.RUnlock()
+	fake.closeMutex.RLock()
+	defer fake.closeMutex.RUnlock()
 	fake.listContainersMutex.RLock()
 	defer fake.listContainersMutex.RUnlock()
 	fake.restoreMutex.RLock()
@@ -345,6 +437,8 @@ func (fake *FakeRefunctionServiceClient) Invocations() map[string][][]interface{
 	defer fake.sendFunctionMutex.RUnlock()
 	fake.sendRequestMutex.RLock()
 	defer fake.sendRequestMutex.RUnlock()
+	fake.startMutex.RLock()
+	defer fake.startMutex.RUnlock()
 	copiedInvocations := map[string][][]interface{}{}
 	for key, value := range fake.invocations {
 		copiedInvocations[key] = value
@@ -352,7 +446,7 @@ func (fake *FakeRefunctionServiceClient) Invocations() map[string][][]interface{
 	return copiedInvocations
 }
 
-func (fake *FakeRefunctionServiceClient) recordInvocation(key string, args []interface{}) {
+func (fake *FakeClient) recordInvocation(key string, args []interface{}) {
 	fake.invocationsMutex.Lock()
 	defer fake.invocationsMutex.Unlock()
 	if fake.invocations == nil {
@@ -364,4 +458,4 @@ func (fake *FakeRefunctionServiceClient) recordInvocation(key string, args []int
 	fake.invocations[key] = append(fake.invocations[key], args)
 }
 
-var _ refunctionv1alpha.RefunctionServiceClient = new(FakeRefunctionServiceClient)
+var _ funker.Client = new(FakeClient)

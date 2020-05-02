@@ -23,9 +23,11 @@ var prevrc []byte
 
 var _ = BeforeSuite(func() {
 	funkrc, err := ioutil.ReadFile(rcPath())
-	Expect(err).NotTo(HaveOccurred())
-
-	prevrc = funkrc
+	if err == nil {
+		prevrc = funkrc
+	} else {
+		prevrc = []byte{}
+	}
 
 	os.RemoveAll(rcPath())
 })
